@@ -357,8 +357,12 @@ export default function Home() {
               </Link>
 
               <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                📦 FARM
-              </Link>
+  📦 FARM
+</Link>
+
+<Link href="/plantao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+  ⏰ PLANTÃO
+</Link>
 
               <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 🏆 RANKING
