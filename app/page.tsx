@@ -471,6 +471,16 @@ export default function Home() {
   <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
     🏭 PRODUÇÃO
   </Link>
+)}{(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente Geral" ||
+  cargoLimpo === "Gerente de Produção") && (
+  <Link
+    href="/reembolso"
+    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
+  >
+    💸 REEMBOLSO
+  </Link>
 )}
 
               <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
