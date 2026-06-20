@@ -446,7 +446,32 @@ export default function Home() {
 
               <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 📦 FARM
-              </Link>
+              </Link>{(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente Geral" ||
+  cargoLimpo === "Gerente de Compras") && (
+  <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+    🛒 COMPRAS
+  </Link>
+)}
+
+{(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente Geral" ||
+  cargoLimpo === "Gerente de Vendas") && (
+  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+    💰 VENDAS
+  </Link>
+)}
+
+{(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente Geral" ||
+  cargoLimpo === "Gerente de Produção") && (
+  <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+    🏭 PRODUÇÃO
+  </Link>
+)}
 
               <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 🏆 RANKING

@@ -74,17 +74,21 @@ export default function AdminPage() {
       const cargo = membro.cargo?.trim();
       const status = membro.status?.trim();
 
-      if (
-        status === "aprovado" &&
-        (cargo === "Gerente" || cargo === "Vice-Líder" || cargo === "Líder")
-      ) {
-        setTemPermissao(true);
-        await carregarFarms();
-        await carregarMembros();
-        await carregarMetas();
-      } else {
-        setTemPermissao(false);
-      }
+   if (
+  status === "aprovado" &&
+  (
+    cargo === "Gerente Geral" ||
+    cargo === "Vice-Líder" ||
+    cargo === "Líder"
+  )
+) {
+  setTemPermissao(true);
+  await carregarFarms();
+  await carregarMembros();
+  await carregarMetas();
+} else {
+  setTemPermissao(false);
+}
 
       setCarregando(false);
     }
@@ -342,11 +346,15 @@ export default function AdminPage() {
                 onChange={(e) => mudarCargo(membro.id, e.target.value)}
                 className="mt-4 w-full rounded bg-zinc-900 p-3 text-white"
               >
-                <option value="Membro">👥 Membro</option>
-                <option value="Gerente">🛡️ Gerente</option>
-                <option value="Vice-Líder">👑 Vice-Líder</option>
-                <option value="Líder">🏆 Líder</option>
-              </select>
+<option value="Membro">👥 Membro</option>
+<option value="Gerente de Farm">🌿 Gerente de Farm</option>
+<option value="Gerente de Vendas">💰 Gerente de Vendas</option>
+<option value="Gerente de Produção">🏭 Gerente de Produção</option>
+<option value="Gerente de Compras">🛒 Gerente de Compras</option>
+<option value="Gerente Geral">🛡️ Gerente Geral</option>
+<option value="Vice-Líder">👑 Vice-Líder</option>
+<option value="Líder">🏆 Líder</option>
+</select>
 
               <div className="mt-5 flex gap-3">
                 <button

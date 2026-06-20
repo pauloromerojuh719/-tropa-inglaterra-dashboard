@@ -35,9 +35,12 @@ export default function MembrosPage() {
 
   const lideres = membros.filter((m) => m.cargo === "Líder");
   const vices = membros.filter((m) => m.cargo === "Vice-Líder");
-  const gerentes = membros.filter((m) => m.cargo === "Gerente");
-  const soldados = membros.filter((m) => m.cargo === "Soldado");
-  const recrutas = membros.filter((m) => m.cargo === "Recruta");
+  const gerenteGeral = membros.filter((m) => m.cargo === "Gerente Geral");
+  const gerenteFarm = membros.filter((m) => m.cargo === "Gerente de Farm");
+  const gerenteCompras = membros.filter((m) => m.cargo === "Gerente de Compras");
+  const gerenteVendas = membros.filter((m) => m.cargo === "Gerente de Vendas");
+  const gerenteProducao = membros.filter((m) => m.cargo === "Gerente de Produção");
+  const membrosComuns = membros.filter((m) => m.cargo === "Membro");
 
   function CardMembro(membro: Membro) {
     return (
@@ -60,66 +63,46 @@ export default function MembrosPage() {
     );
   }
 
+  function SecaoMembros({
+    titulo,
+    lista,
+  }: {
+    titulo: string;
+    lista: Membro[];
+  }) {
+    return (
+      <section className="mb-10">
+        <h2 className="mb-4 text-3xl font-bold text-red-500">
+          {titulo}
+        </h2>
+
+        {lista.length === 0 ? (
+          <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-5 text-zinc-400">
+            Nenhum membro neste cargo.
+          </p>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {lista.map(CardMembro)}
+          </div>
+        )}
+      </section>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-black p-10 text-white">
       <h1 className="mb-10 text-center text-5xl font-black text-red-600">
         👥 MEMBROS DA INGLATERRA
       </h1>
 
-      {/* Líder */}
-      <section className="mb-10">
-        <h2 className="mb-4 text-3xl font-bold text-yellow-400">
-          🏆 Líder
-        </h2>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {lideres.map(CardMembro)}
-        </div>
-      </section>
-
-      {/* Vice */}
-      <section className="mb-10">
-        <h2 className="mb-4 text-3xl font-bold text-purple-400">
-          👑 Vice-Líder
-        </h2>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {vices.map(CardMembro)}
-        </div>
-      </section>
-
-      {/* Gerentes */}
-      <section className="mb-10">
-        <h2 className="mb-4 text-3xl font-bold text-blue-400">
-          🛡️ Gerentes
-        </h2>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {gerentes.map(CardMembro)}
-        </div>
-      </section>
-
-      {/* Soldados */}
-      <section className="mb-10">
-        <h2 className="mb-4 text-3xl font-bold text-green-400">
-          ⚔️ Soldados
-        </h2>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {soldados.map(CardMembro)}
-        </div>
-      </section>
-
-      {/* Recrutas */}
-      <section>
-        <h2 className="mb-4 text-3xl font-bold text-zinc-400">
-          🪖 Recrutas
-        </h2>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          {recrutas.map(CardMembro)}
-        </div>
-      </section>
+      <SecaoMembros titulo="🏆 Líder" lista={lideres} />
+      <SecaoMembros titulo="👑 Vice-Líder" lista={vices} />
+      <SecaoMembros titulo="🛡️ Gerente Geral" lista={gerenteGeral} />
+      <SecaoMembros titulo="🌿 Gerente de Farm" lista={gerenteFarm} />
+      <SecaoMembros titulo="🛒 Gerente de Compras" lista={gerenteCompras} />
+      <SecaoMembros titulo="💰 Gerente de Vendas" lista={gerenteVendas} />
+      <SecaoMembros titulo="🏭 Gerente de Produção" lista={gerenteProducao} />
+      <SecaoMembros titulo="👥 Membros" lista={membrosComuns} />
     </main>
   );
 }
