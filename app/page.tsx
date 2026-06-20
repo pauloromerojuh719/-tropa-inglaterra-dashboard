@@ -444,13 +444,32 @@ export default function Home() {
                 🎯 METAS
               </Link>
 
-              <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                📦 FARM
-              </Link>{(cargoLimpo === "Líder" ||
+   <Link
+  href="/farm"
+  className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
+>
+  📦 FARM
+</Link>
+
+{(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente Geral" ||
+  cargoLimpo === "Gerente de Farm") && (
+  <Link
+    href="/controle-farm"
+    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
+  >
+    🌿 CONTROLE FARM
+  </Link>
+)}
+  {(cargoLimpo === "Líder" ||
   cargoLimpo === "Vice-Líder" ||
   cargoLimpo === "Gerente Geral" ||
   cargoLimpo === "Gerente de Compras") && (
-  <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+  <Link
+    href="/compras"
+    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
+  >
     🛒 COMPRAS
   </Link>
 )}

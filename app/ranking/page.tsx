@@ -70,7 +70,7 @@ export default function RankingPage() {
 
       <section className="rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="mb-5 text-3xl font-bold">
-          ⏱️ Ranking de Horas na Cidade
+          ⏱️ Ranking de Horas Manual
         </h2>
 
         {carregando ? (
