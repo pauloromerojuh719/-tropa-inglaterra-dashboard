@@ -2,7 +2,14 @@
 
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
-import { doc, getDoc } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  Timestamp,
+} from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 type Membro = {
@@ -10,10 +17,95 @@ type Membro = {
   status: string;
 };
 
+type Compra = {
+  id: string;
+  item: string;
+  quantidade: number;
+  valor: number;
+  comprador: string;
+  criadoEm: any;
+};
+
 export default function ComprasPage() {
   const { data: session } = useSession();
+
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+
+  const [item, setItem] = useState("");
+  const [quantidade, setQuantidade] = useState("");
+  const [valor, setValor] = useState("");
+  const [compras, setCompras] = useState<Compra[]>([]);
+
+  function formatarDinheiro(valor: number) {
+    return valor.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
+  }
+
+  function formatarData(data: any) {
+    if (!data?.toDate) return "Sem data";
+    return data.toDate().toLocaleString("pt-BR");
+  }
+
+  function inicioDaSemana() {
+    const hoje = new Date();
+    const dia = hoje.getDay();
+    const diferenca = dia === 0 ? 6 : dia - 1;
+
+    const inicio = new Date(hoje);
+    inicio.setDate(hoje.getDate() - diferenca);
+    inicio.setHours(0, 0, 0, 0);
+
+    return inicio;
+  }
+
+  function inicioDoMes() {
+    const hoje = new Date();
+    return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  }
+
+  async function carregarCompras() {
+    const snapshot = await getDocs(collection(db, "compras"));
+
+    const lista = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<Compra, "id">),
+    })) as Compra[];
+
+    lista.sort((a, b) => {
+      const dataA = a.criadoEm?.toDate?.()?.getTime?.() || 0;
+      const dataB = b.criadoEm?.toDate?.()?.getTime?.() || 0;
+      return dataB - dataA;
+    });
+
+    setCompras(lista);
+  }
+
+  async function salvarCompra() {
+    if (!session?.user) return;
+
+    if (!item || !quantidade || !valor) {
+      alert("Preencha item, quantidade e valor.");
+      return;
+    }
+
+    await addDoc(collection(db, "compras"), {
+      item,
+      quantidade: Number(quantidade),
+      valor: Number(valor),
+      comprador: session.user.name || "Sem nome",
+      criadoEm: Timestamp.now(),
+    });
+
+    setItem("");
+    setQuantidade("");
+    setValor("");
+
+    await carregarCompras();
+    alert("Compra registrada!");
+  }
 
   useEffect(() => {
     async function verificarPermissao() {
@@ -50,6 +142,7 @@ export default function ComprasPage() {
         )
       ) {
         setTemPermissao(true);
+        await carregarCompras();
       } else {
         setTemPermissao(false);
       }
@@ -59,6 +152,25 @@ export default function ComprasPage() {
 
     verificarPermissao();
   }, [session]);
+
+  const totalGasto = compras.reduce(
+    (total, compra) => total + (compra.valor || 0),
+    0
+  );
+
+  const gastoSemana = compras
+    .filter((compra) => {
+      const data = compra.criadoEm?.toDate?.();
+      return data && data >= inicioDaSemana();
+    })
+    .reduce((total, compra) => total + (compra.valor || 0), 0);
+
+  const gastoMes = compras
+    .filter((compra) => {
+      const data = compra.criadoEm?.toDate?.();
+      return data && data >= inicioDoMes();
+    })
+    .reduce((total, compra) => total + (compra.valor || 0), 0);
 
   if (carregando) {
     return (
@@ -89,9 +201,7 @@ export default function ComprasPage() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-8 text-center">
-          <h1 className="text-5xl font-black text-red-600">
-            ❌ ACESSO NEGADO
-          </h1>
+          <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
           <p className="mt-4 text-zinc-400">
             Apenas Líder, Vice-Líder, Gerente Geral ou Gerente de Compras podem acessar esta área.
           </p>
@@ -102,19 +212,110 @@ export default function ComprasPage() {
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="text-5xl font-black text-red-600">
-        🛒 COMPRAS
-      </h1>
+      <h1 className="text-5xl font-black text-red-600">🛒 COMPRAS</h1>
 
-      <div className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">
-          Controle de Compras
-        </h2>
+      <div className="mt-8 grid gap-6 md:grid-cols-4">
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <p className="text-zinc-400">Gasto da semana</p>
+          <h2 className="mt-2 text-3xl font-black text-red-500">
+            {formatarDinheiro(gastoSemana)}
+          </h2>
+        </div>
 
-        <p className="mt-4 text-zinc-400">
-          Área exclusiva do Gerente de Compras.
-        </p>
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <p className="text-zinc-400">Gasto do mês</p>
+          <h2 className="mt-2 text-3xl font-black text-red-500">
+            {formatarDinheiro(gastoMes)}
+          </h2>
+        </div>
+
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <p className="text-zinc-400">Total geral</p>
+          <h2 className="mt-2 text-3xl font-black">
+            {formatarDinheiro(totalGasto)}
+          </h2>
+        </div>
+
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <p className="text-zinc-400">Compras registradas</p>
+          <h2 className="mt-2 text-3xl font-black">{compras.length}</h2>
+        </div>
       </div>
+
+      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+        <h2 className="text-3xl font-bold">Registrar Compra</h2>
+
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          <input
+            value={item}
+            onChange={(e) => setItem(e.target.value)}
+            placeholder="Item comprado"
+            className="rounded bg-black p-4 text-white"
+          />
+
+          <input
+            value={quantidade}
+            onChange={(e) => setQuantidade(e.target.value)}
+            placeholder="Quantidade"
+            type="number"
+            className="rounded bg-black p-4 text-white"
+          />
+
+          <input
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="Valor total"
+            type="number"
+            className="rounded bg-black p-4 text-white"
+          />
+        </div>
+
+        <button
+          onClick={salvarCompra}
+          className="mt-5 rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
+        >
+          Salvar Compra
+        </button>
+      </section>
+
+      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+        <h2 className="mb-5 text-3xl font-bold">Histórico de Compras</h2>
+
+        {compras.length === 0 ? (
+          <p className="text-zinc-400">Nenhuma compra registrada ainda.</p>
+        ) : (
+          <div className="grid gap-4">
+            {compras.map((compra) => (
+              <div
+                key={compra.id}
+                className="rounded-xl border border-zinc-800 bg-black p-5"
+              >
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-2xl font-bold">🛒 {compra.item}</h3>
+
+                    <p className="mt-2 text-zinc-400">
+                      Quantidade: {compra.quantidade}
+                    </p>
+
+                    <p className="text-zinc-400">
+                      Comprador: {compra.comprador}
+                    </p>
+
+                    <p className="text-zinc-400">
+                      Data: {formatarData(compra.criadoEm)}
+                    </p>
+                  </div>
+
+                  <p className="text-2xl font-black text-red-500">
+                    {formatarDinheiro(compra.valor)}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
     </main>
   );
 }
