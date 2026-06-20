@@ -5,13 +5,16 @@ import Link from "next/link";
 import Image from "next/image";
 import { signIn, signOut, useSession } from "next-auth/react";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
   getDocs,
   query,
   setDoc,
+  updateDoc,
   where,
+  Timestamp,
 } from "firebase/firestore";
 import { db } from "./lib/firebase";
 
@@ -39,6 +42,16 @@ type Farm = {
   status: string;
 };
 
+type Plantao = {
+  id: string;
+  nome: string;
+  email: string;
+  inicio: any;
+  fim?: any;
+  minutos?: number;
+  status: "aberto" | "fechado";
+};
+
 export default function Home() {
   const { data: session } = useSession();
 
@@ -52,6 +65,9 @@ export default function Home() {
   const [seringasMeta, setSeringasMeta] = useState(0);
   const [agulhasMeta, setAgulhasMeta] = useState(0);
   const [posicaoRanking, setPosicaoRanking] = useState("-");
+
+  const [plantaoAberto, setPlantaoAberto] = useState<Plantao | null>(null);
+  const [totalMinutosPlantao, setTotalMinutosPlantao] = useState(0);
 
   const cargoLimpo = membro?.cargo?.trim();
 
@@ -69,6 +85,77 @@ export default function Home() {
   );
 
   const statusMeta = totalFarm >= totalMeta ? "META BATIDA" : "EM ANDAMENTO";
+
+  function formatarMinutos(minutos: number) {
+    const horas = Math.floor(minutos / 60);
+    const mins = minutos % 60;
+    return `${horas}h ${mins}m`;
+  }
+
+  async function buscarPlantoes() {
+    if (!session?.user?.email) return;
+
+    const q = query(
+      collection(db, "plantoes"),
+      where("email", "==", session.user.email)
+    );
+
+    const snapshot = await getDocs(q);
+
+    const lista = snapshot.docs.map((item) => ({
+      id: item.id,
+      ...item.data(),
+    })) as Plantao[];
+
+    const aberto = lista.find((p) => p.status === "aberto");
+    setPlantaoAberto(aberto || null);
+
+    const total = lista
+      .filter((p) => p.status === "fechado")
+      .reduce((soma, p) => soma + (p.minutos || 0), 0);
+
+    setTotalMinutosPlantao(total);
+  }
+
+  async function iniciarPlantao() {
+    if (!session?.user) return;
+
+    if (plantaoAberto) {
+      alert("Você já está com entrada aberta.");
+      return;
+    }
+
+    await addDoc(collection(db, "plantoes"), {
+      nome: session.user.name || "Sem nome",
+      email: session.user.email || "",
+      inicio: Timestamp.now(),
+      status: "aberto",
+    });
+
+    await buscarPlantoes();
+  }
+
+  async function encerrarPlantao() {
+    if (!plantaoAberto) {
+      alert("Você não tem entrada aberta.");
+      return;
+    }
+
+    const agora = Timestamp.now();
+
+    const inicioMillis = plantaoAberto.inicio.toDate().getTime();
+    const fimMillis = agora.toDate().getTime();
+
+    const minutos = Math.max(1, Math.floor((fimMillis - inicioMillis) / 60000));
+
+    await updateDoc(doc(db, "plantoes", plantaoAberto.id), {
+      fim: agora,
+      minutos,
+      status: "fechado",
+    });
+
+    await buscarPlantoes();
+  }
 
   useEffect(() => {
     async function buscarMembro() {
@@ -164,6 +251,7 @@ export default function Home() {
     buscarMembro();
     buscarAvisos();
     buscarMinhaMetaERanking();
+    buscarPlantoes();
   }, [session]);
 
   async function solicitarEntrada() {
@@ -357,12 +445,8 @@ export default function Home() {
               </Link>
 
               <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  📦 FARM
-</Link>
-
-<Link href="/plantao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  ⏰ PLANTÃO
-</Link>
+                📦 FARM
+              </Link>
 
               <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 🏆 RANKING
@@ -389,23 +473,55 @@ export default function Home() {
 
           <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
             <div className="rounded-xl border border-red-950 bg-black p-6">
-              <p className="font-black text-red-500">BEM-VINDO(A)!</p>
+              <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="font-black text-red-500">BEM-VINDO(A)!</p>
 
-              <h3 className="mt-2 text-3xl font-black">
-                {membro.nomeRP || membro.nome}
-              </h3>
+                  <h3 className="mt-2 text-3xl font-black">
+                    {membro.nomeRP || membro.nome}
+                  </h3>
 
-              <p className="mt-2 text-zinc-400">
-                Passaporte: {membro.passaporte || "Não informado"}
-              </p>
+                  <p className="mt-2 text-zinc-400">
+                    Passaporte: {membro.passaporte || "Não informado"}
+                  </p>
 
-              <span className="mt-3 inline-block rounded-full bg-red-800 px-4 py-1 text-sm">
-                {membro.cargo}
-              </span>
+                  <span className="mt-3 inline-block rounded-full bg-red-800 px-4 py-1 text-sm">
+                    {membro.cargo}
+                  </span>
+                </div>
+
+                <div className="rounded-xl border border-red-900 bg-zinc-950 p-4 text-center">
+                  <p className="text-sm font-bold text-zinc-400">
+                    REGISTRO DE HORAS
+                  </p>
+
+                  <p className="mt-2 text-xl font-black">
+                    {plantaoAberto ? "🟢 Em plantão" : "⚪ Fora da cidade"}
+                  </p>
+
+                  <div className="mt-4 flex gap-3">
+                    <button
+                      onClick={iniciarPlantao}
+                      disabled={!!plantaoAberto}
+                      className="rounded-lg bg-green-700 px-5 py-3 font-bold text-white hover:bg-green-600 disabled:opacity-40"
+                    >
+                      🟢 Entrada
+                    </button>
+
+                    <button
+                      onClick={encerrarPlantao}
+                      disabled={!plantaoAberto}
+                      className="rounded-lg bg-red-700 px-5 py-3 font-bold text-white hover:bg-red-600 disabled:opacity-40"
+                    >
+                      🔴 Saída
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-4">
-              <Card titulo="HORAS NA CIDADE" valor="00h 00m" desc="ESSA SEMANA" />
+              <Card titulo="HORAS NA CIDADE" valor={formatarMinutos(totalMinutosPlantao)} desc="TOTAL REGISTRADO" />
               <Card titulo="STATUS DA META" valor={statusMeta} desc="SEMANA ATUAL" />
               <Card titulo="CARGO" valor={membro.cargo} desc="ATUAL" />
               <Card titulo="POSIÇÃO" valor={posicaoRanking} desc="RANKING" />
