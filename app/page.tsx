@@ -656,7 +656,7 @@ async function buscarDashboardGeral() {
               </div>
             </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2">
+         <div className="mt-5 grid gap-4 md:grid-cols-2">
   <Card
     titulo="HORAS NA CIDADE"
     valor={formatarMinutos(totalMinutosPlantao)}
@@ -671,77 +671,55 @@ async function buscarDashboardGeral() {
     />
   )}
 </div>
-             
-   
 
-            {!isElite && (
-            <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-              <div className="mb-5 flex items-center justify-between">
-                <h2 className="text-2xl font-black text-red-500">
-                  🎯 MINHA META SEMANAL
-                </h2>
+{!isElite && (
+  <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+    <h2 className="text-2xl font-black text-red-500">
+      🎯 META SEMANAL
+    </h2>
 
-                <span className="rounded-full bg-red-800 px-4 py-2 text-lg font-black">
-                  {porcentagemMeta}%
-                </span>
-              </div>
+    <p className="mt-3 text-3xl font-black text-green-400">
+      {statusMeta}
+    </p>
 
-              <div className="mb-6">
-                <div className="mb-2 flex justify-between text-sm text-zinc-400">
-                  <span>Progresso total</span>
-                  <span>
-                    {totalFarm} / {totalMeta} itens
-                  </span>
-                </div>
+    <p className="mt-2 text-zinc-400">
+      Consulte os detalhes completos na aba Metas.
+    </p>
+  </section>
+)}
 
-                <div className="h-5 w-full rounded-full bg-zinc-800">
-                  <div
-                    className="h-5 rounded-full bg-red-600"
-                    style={{ width: `${porcentagemMeta}%` }}
-                  />
-                </div>
-              </div>
+{isElite && (
+  <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+    <h2 className="text-2xl font-black text-red-500">
+      ⚔️ ELITE DE AÇÕES
+    </h2>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <MetaItem nome="🍃 Folhas" valor={folhasMeta} meta={2000} />
-                <MetaItem nome="💊 Ópios" valor={opiosMeta} meta={2000} />
-                <MetaItem nome="💉 Seringas" valor={seringasMeta} meta={800} />
-                <MetaItem nome="🪡 Agulhas" valor={agulhasMeta} meta={800} />
-              </div>
-            </section>
-            )}
+    <p className="mt-3 text-zinc-300">
+      Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
+    </p>
+  </section>
+)}
 
-            {isElite && (
-              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-                <h2 className="text-2xl font-black text-red-500">
-                  ⚔️ ELITE DE AÇÕES
-                </h2>
-                <p className="mt-3 text-zinc-300">
-                  Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
-                </p>
-              </section>
-            )}
+<section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+  <h2 className="mb-4 text-2xl font-black text-red-500">
+    📢 AVISOS DA INGLATERRA
+  </h2>
 
-            <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-              <h2 className="mb-4 text-2xl font-black text-red-500">
-                📢 AVISOS DA INGLATERRA
-              </h2>
+  {avisos.length === 0 && (
+    <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>
+  )}
 
-              {avisos.length === 0 && (
-                <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>
-              )}
-
-              <div className="grid gap-3">
-                {avisos.map((aviso) => (
-                  <div
-                    key={aviso.id}
-                    className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
-                  >
-                    <p className="text-zinc-200">{aviso.texto}</p>
-                  </div>
-                ))}
-              </div>
-            </section>
+  <div className="grid gap-3">
+    {avisos.map((aviso) => (
+      <div
+        key={aviso.id}
+        className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+      >
+        <p className="text-zinc-200">{aviso.texto}</p>
+      </div>
+    ))}
+  </div>
+</section>
           </div>
         </section>
       </section>
@@ -763,34 +741,6 @@ function Card({
       <p className="text-sm text-zinc-400">{titulo}</p>
       <h3 className="mt-2 text-2xl font-black">{valor}</h3>
       <p className="mt-2 text-xs text-zinc-500">{desc}</p>
-    </div>
-  );
-}
-
-function MetaItem({
-  nome,
-  valor,
-  meta,
-}: {
-  nome: string;
-  valor: number;
-  meta: number;
-}) {
-  return (
-    <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-      <h3 className="text-xl font-bold">{nome}</h3>
-
-      <p className="mt-2 text-lg">
-        {valor} / {meta}
-      </p>
-
-      {valor >= meta ? (
-        <p className="mt-2 font-bold text-green-400">✅ META BATIDA</p>
-      ) : (
-        <p className="mt-2 font-bold text-yellow-400">
-          Falta {meta - valor}
-        </p>
-      )}
     </div>
   );
 }
