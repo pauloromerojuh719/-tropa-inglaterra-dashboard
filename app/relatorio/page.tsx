@@ -16,6 +16,7 @@ type Membro = {
 
 type LinhaMeta = {
   nome: string;
+  cargo: string;
   folhas: number;
   opios: number;
   seringas: number;
@@ -72,7 +73,8 @@ export default function RelatorioPage() {
     const d = data?.toDate?.();
     return d && d >= inicioDaSemana() && d <= fimDaSemana();
   }
-    async function carregarRelatorio() {
+
+  async function carregarRelatorio() {
     const membrosSnap = await getDocs(collection(db, "membros"));
     const farmSnap = await getDocs(collection(db, "farm"));
     const vendasSnap = await getDocs(collection(db, "vendas"));
@@ -87,8 +89,19 @@ export default function RelatorioPage() {
 
       if (m.status !== "aprovado") return;
 
+      const cargo = m.cargo?.trim();
+
+      const isentoFarm =
+        cargo === "Elite" ||
+        cargo === "Gerente de Ações" ||
+        cargo === "Líder" ||
+        cargo === "Vice-Líder";
+
+      if (isentoFarm) return;
+
       mapa[docItem.id] = {
         nome: m.nomeRP || m.nome || "Sem nome",
+        cargo: cargo || "Sem cargo",
         folhas: 0,
         opios: 0,
         seringas: 0,
@@ -253,7 +266,8 @@ ${naoBateram.length ? naoBateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"
 
     pdf.save("relatorio-semanal-inglaterra.pdf");
   }
-    if (carregando) {
+
+  if (carregando) {
     return (
       <main className="min-h-screen bg-black p-10 text-white">
         Carregando...
