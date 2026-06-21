@@ -40,7 +40,9 @@ export default function MembrosPage() {
   const gerenteCompras = membros.filter((m) => m.cargo === "Gerente de Compras");
   const gerenteVendas = membros.filter((m) => m.cargo === "Gerente de Vendas");
   const gerenteProducao = membros.filter((m) => m.cargo === "Gerente de Produção");
-  const membrosComuns = membros.filter((m) => m.cargo === "Membro");
+const gerenteAcoes = membros.filter((m) => m.cargo === "Gerente de Ações");
+const elite = membros.filter((m) => m.cargo === "Elite");
+const membrosComuns = membros.filter((m) => m.cargo === "Membro");
 
   function CardMembro(membro: Membro) {
     return (
@@ -102,6 +104,8 @@ export default function MembrosPage() {
       <SecaoMembros titulo="🛒 Gerente de Compras" lista={gerenteCompras} />
       <SecaoMembros titulo="💰 Gerente de Vendas" lista={gerenteVendas} />
       <SecaoMembros titulo="🏭 Gerente de Produção" lista={gerenteProducao} />
+      <SecaoMembros titulo="🎯 Gerente de Ações" lista={gerenteAcoes} />
+<SecaoMembros titulo="🔫 Elite" lista={elite} />
       <SecaoMembros titulo="👥 Membros" lista={membrosComuns} />
     </main>
   );

@@ -76,6 +76,10 @@ const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
 
   const cargoLimpo = membro?.cargo?.trim();
 
+  const isElite =
+    cargoLimpo === "Elite" ||
+    cargoLimpo === "Gerente de Ações";
+
   const podeVerAdmin =
     cargoLimpo === "Gerente" ||
     cargoLimpo === "Vice-Líder" ||
@@ -89,7 +93,7 @@ const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
     100
   );
 
-  const statusMeta = totalFarm >= totalMeta ? "META BATIDA" : "EM ANDAMENTO";
+  const statusMeta = isElite ? "ISENTO" : totalFarm >= totalMeta ? "META BATIDA" : "EM ANDAMENTO";
 
   function formatarMinutos(minutos: number) {
     const horas = Math.floor(minutos / 60);
@@ -659,15 +663,18 @@ async function buscarDashboardGeral() {
     desc="TOTAL REGISTRADO"
   />
 
-  <Card
-    titulo="STATUS DA META"
-    valor={statusMeta}
-    desc="SEMANA ATUAL"
-  />
+  {!isElite && (
+    <Card
+      titulo="STATUS DA META"
+      valor={statusMeta}
+      desc="SEMANA ATUAL"
+    />
+  )}
 </div>
              
    
 
+            {!isElite && (
             <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
               <div className="mb-5 flex items-center justify-between">
                 <h2 className="text-2xl font-black text-red-500">
@@ -702,6 +709,18 @@ async function buscarDashboardGeral() {
                 <MetaItem nome="🪡 Agulhas" valor={agulhasMeta} meta={800} />
               </div>
             </section>
+            )}
+
+            {isElite && (
+              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+                <h2 className="text-2xl font-black text-red-500">
+                  ⚔️ ELITE DE AÇÕES
+                </h2>
+                <p className="mt-3 text-zinc-300">
+                  Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
+                </p>
+              </section>
+            )}
 
             <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
               <h2 className="mb-4 text-2xl font-black text-red-500">
