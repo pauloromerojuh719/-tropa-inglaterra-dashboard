@@ -652,18 +652,21 @@ async function buscarDashboardGeral() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
-              <Card titulo="HORAS NA CIDADE" valor={formatarMinutos(totalMinutosPlantao)} desc="TOTAL REGISTRADO" />
-              <Card titulo="STATUS DA META" valor={statusMeta} desc="SEMANA ATUAL" />
-              <Card titulo="CARGO" valor={membro.cargo} desc="ATUAL" />
-              <Card titulo="POSIÇÃO" valor={posicaoRanking} desc="RANKING" />
-            </div>
-            <div className="mt-5 grid gap-4 md:grid-cols-4">
-  <Card titulo="👥 MEMBROS" valor={String(totalMembros)} desc="APROVADOS" />
-  <Card titulo="📦 FARM GERAL" valor={String(totalFarmGeral)} desc="TOTAL APROVADO" />
-  <Card titulo="🛒 COMPRAS" valor={`R$ ${totalCompras.toLocaleString("pt-BR")}`} desc="TOTAL GASTO" />
-  <Card titulo="💸 REEMBOLSOS" valor={`R$ ${reembolsosPendentes.toLocaleString("pt-BR")}`} desc="PENDENTES" />
-</div>s
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+  <Card
+    titulo="HORAS NA CIDADE"
+    valor={formatarMinutos(totalMinutosPlantao)}
+    desc="TOTAL REGISTRADO"
+  />
+
+  <Card
+    titulo="STATUS DA META"
+    valor={statusMeta}
+    desc="SEMANA ATUAL"
+  />
+</div>
+             
+   
 
             <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
               <div className="mb-5 flex items-center justify-between">

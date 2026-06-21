@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import jsPDF from "jspdf";
 
 type Membro = {
   nome?: string;
@@ -71,8 +72,7 @@ export default function RelatorioPage() {
     const d = data?.toDate?.();
     return d && d >= inicioDaSemana() && d <= fimDaSemana();
   }
-
-  async function carregarRelatorio() {
+    async function carregarRelatorio() {
     const membrosSnap = await getDocs(collection(db, "membros"));
     const farmSnap = await getDocs(collection(db, "farm"));
     const vendasSnap = await getDocs(collection(db, "vendas"));
@@ -202,34 +202,58 @@ export default function RelatorioPage() {
   const fimSemana = fimDaSemana();
 
   const textoRelatorio = `
-📊 RELATÓRIO SEMANAL - INGLATERRA
+RELATÓRIO SEMANAL - INGLATERRA
 
-📅 Semana: ${formatarDataSimples(inicioSemana)} até ${formatarDataSimples(fimSemana)}
+Semana: ${formatarDataSimples(inicioSemana)} até ${formatarDataSimples(fimSemana)}
 
-✅ Bateram Meta: ${bateram.length}
-❌ Não Bateram Meta: ${naoBateram.length}
+Bateram Meta: ${bateram.length}
+Não Bateram Meta: ${naoBateram.length}
 
-💰 ENTRADAS
+ENTRADAS
 Vendas: ${formatarDinheiro(vendasSemana)}
 Ações: ${formatarDinheiro(acoesSemana)}
 Total Entrada: ${formatarDinheiro(entradas)}
 
-💸 SAÍDAS
+SAÍDAS
 Compras: ${formatarDinheiro(comprasSemana)}
 Reembolsos: ${formatarDinheiro(reembolsosSemana)}
 Total Saída: ${formatarDinheiro(saidas)}
 
-📈 RESULTADO FINAL
+RESULTADO FINAL
 ${formatarDinheiro(resultado)}
 
-📋 BATERAM META
-${bateram.length ? bateram.map((m) => `✅ ${m.nome}`).join("\n") : "Nenhum"}
+BATERAM META
+${bateram.length ? bateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"}
 
-📋 NÃO BATERAM META
-${naoBateram.length ? naoBateram.map((m) => `❌ ${m.nome}`).join("\n") : "Nenhum"}
+NÃO BATERAM META
+${naoBateram.length ? naoBateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"}
 `.trim();
 
-  if (carregando) {
+  function gerarPDF() {
+    const pdf = new jsPDF();
+
+    pdf.setFontSize(18);
+    pdf.text("RELATÓRIO SEMANAL - INGLATERRA", 10, 15);
+
+    pdf.setFontSize(11);
+
+    const linhas = pdf.splitTextToSize(textoRelatorio, 180);
+
+    let y = 30;
+
+    linhas.forEach((linha: string) => {
+      if (y > 280) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.text(linha, 10, y);
+      y += 7;
+    });
+
+    pdf.save("relatorio-semanal-inglaterra.pdf");
+  }
+    if (carregando) {
     return (
       <main className="min-h-screen bg-black p-10 text-white">
         Carregando...
@@ -320,7 +344,7 @@ ${naoBateram.length ? naoBateram.map((m) => `❌ ${m.nome}`).join("\n") : "Nenhu
       </section>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">📋 Texto pronto para enviar</h2>
+        <h2 className="text-3xl font-bold">📋 Relatório pronto</h2>
 
         <textarea
           value={textoRelatorio}
@@ -329,15 +353,11 @@ ${naoBateram.length ? naoBateram.map((m) => `❌ ${m.nome}`).join("\n") : "Nenhu
         />
 
         <button
-       
-  onClick={async () => {
-    await navigator.clipboard.writeText(textoRelatorio);
-    alert("Relatório copiado!");
-  }}
-  className="mt-5 rounded bg-red-700 px-6 py-3 font-bold"
->
-  📄 Copiar Relatório
-</button>
+          onClick={gerarPDF}
+          className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
+        >
+          📄 Gerar PDF
+        </button>
       </section>
     </main>
   );
