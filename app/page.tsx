@@ -578,7 +578,16 @@ async function buscarDashboardGeral() {
     🎯 AÇÕES
   </Link>
 )}
-
+{(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente Geral") && (
+  <Link
+    href="/relatorio"
+    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
+  >
+    📊 RELATÓRIO
+  </Link>
+)}
               {podeVerAdmin && (
                 <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                   ⚙️ ADMIN
