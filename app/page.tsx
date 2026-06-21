@@ -69,6 +69,11 @@ export default function Home() {
   const [plantaoAberto, setPlantaoAberto] = useState<Plantao | null>(null);
   const [totalMinutosPlantao, setTotalMinutosPlantao] = useState(0);
 
+const [totalMembros, setTotalMembros] = useState(0);
+const [totalFarmGeral, setTotalFarmGeral] = useState(0);
+const [totalCompras, setTotalCompras] = useState(0);
+const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
+
   const cargoLimpo = membro?.cargo?.trim();
 
   const podeVerAdmin =
@@ -195,7 +200,59 @@ export default function Home() {
 
       setAvisos(lista.reverse());
     }
+async function buscarDashboardGeral() {
+  const membrosSnap = await getDocs(collection(db, "membros"));
 
+  const membrosAprovados = membrosSnap.docs.filter((item) => {
+    const dados = item.data() as Membro;
+    return dados.status === "aprovado";
+  });
+
+  setTotalMembros(membrosAprovados.length);
+
+  const farmSnap = await getDocs(
+    query(collection(db, "farm"), where("status", "==", "aprovado"))
+  );
+
+  let somaFarm = 0;
+
+  farmSnap.docs.forEach((item) => {
+    const farm = item.data() as Farm;
+
+    somaFarm +=
+      (farm.folhas || 0) +
+      (farm.opios || 0) +
+      (farm.seringas || 0) +
+      (farm.agulhas || 0);
+  });
+
+  setTotalFarmGeral(somaFarm);
+
+  const comprasSnap = await getDocs(collection(db, "compras"));
+
+  let somaCompras = 0;
+
+  comprasSnap.docs.forEach((item) => {
+    const compra = item.data() as any;
+    somaCompras += compra.valor || 0;
+  });
+
+  setTotalCompras(somaCompras);
+
+  const reembolsoSnap = await getDocs(collection(db, "reembolsos"));
+
+  let somaReembolsoPendente = 0;
+
+  reembolsoSnap.docs.forEach((item) => {
+    const reembolso = item.data() as any;
+
+    if (reembolso.status === "pendente") {
+      somaReembolsoPendente += reembolso.valor || 0;
+    }
+  });
+
+  setReembolsosPendentes(somaReembolsoPendente);
+}
     async function buscarMinhaMetaERanking() {
       if (!session?.user) return;
 
@@ -252,6 +309,7 @@ export default function Home() {
     buscarAvisos();
     buscarMinhaMetaERanking();
     buscarPlantoes();
+    buscarDashboardGeral();
   }, [session]);
 
   async function solicitarEntrada() {
@@ -580,6 +638,12 @@ export default function Home() {
               <Card titulo="CARGO" valor={membro.cargo} desc="ATUAL" />
               <Card titulo="POSIÇÃO" valor={posicaoRanking} desc="RANKING" />
             </div>
+            <div className="mt-5 grid gap-4 md:grid-cols-4">
+  <Card titulo="👥 MEMBROS" valor={String(totalMembros)} desc="APROVADOS" />
+  <Card titulo="📦 FARM GERAL" valor={String(totalFarmGeral)} desc="TOTAL APROVADO" />
+  <Card titulo="🛒 COMPRAS" valor={`R$ ${totalCompras.toLocaleString("pt-BR")}`} desc="TOTAL GASTO" />
+  <Card titulo="💸 REEMBOLSOS" valor={`R$ ${reembolsosPendentes.toLocaleString("pt-BR")}`} desc="PENDENTES" />
+</div>s
 
             <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
               <div className="mb-5 flex items-center justify-between">

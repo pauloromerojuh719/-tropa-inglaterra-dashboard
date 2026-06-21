@@ -29,6 +29,7 @@ type Reembolso = {
   solicitadoPor: string;
   status: "pendente" | "pago";
   criadoEm: any;
+  pagoEm?: any;
 };
 
 export default function ReembolsoPage() {
@@ -121,12 +122,15 @@ export default function ReembolsoPage() {
   async function marcarComoPago(id: string) {
     await updateDoc(doc(db, "reembolsos", id), {
       status: "pago",
+      pagoEm: Timestamp.now(),
     });
 
     await carregarReembolsos();
 
     alert("Reembolso marcado como pago!");
-  }  useEffect(() => {
+  }
+
+  useEffect(() => {
     async function verificarPermissao() {
       if (!session?.user) {
         setCarregando(false);
@@ -175,21 +179,30 @@ export default function ReembolsoPage() {
     verificarPermissao();
   }, [session]);
 
-  const totalPendente = reembolsos
-    .filter((r) => r.status === "pendente")
-    .reduce((total, r) => total + r.valor, 0);
+  const reembolsosPendentes = reembolsos.filter(
+    (r) => r.status === "pendente"
+  );
 
-  const totalPago = reembolsos
-    .filter((r) => r.status === "pago")
-    .reduce((total, r) => total + r.valor, 0);
+  const reembolsosPagos = reembolsos.filter((r) => r.status === "pago");
+
+  const totalPendente = reembolsosPendentes.reduce(
+    (total, r) => total + r.valor,
+    0
+  );
+
+  const totalPago = reembolsosPagos.reduce((total, r) => total + r.valor, 0);
 
   if (carregando) {
-    return <main className="min-h-screen bg-black text-white p-10">Carregando...</main>;
+    return (
+      <main className="min-h-screen bg-black p-10 text-white">
+        Carregando...
+      </main>
+    );
   }
 
   if (!session) {
     return (
-      <main className="min-h-screen bg-black text-white p-10">
+      <main className="min-h-screen bg-black p-10 text-white">
         <button
           onClick={() => signIn("discord")}
           className="rounded bg-red-700 px-6 py-3 font-bold"
@@ -202,7 +215,7 @@ export default function ReembolsoPage() {
 
   if (!temPermissao) {
     return (
-      <main className="min-h-screen bg-black text-white p-10">
+      <main className="min-h-screen bg-black p-10 text-white">
         ❌ Sem permissão
       </main>
     );
@@ -210,9 +223,7 @@ export default function ReembolsoPage() {
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="text-5xl font-black text-red-600">
-        💸 REEMBOLSO
-      </h1>
+      <h1 className="text-5xl font-black text-red-600">💸 REEMBOLSO</h1>
 
       <div className="mt-8 grid gap-6 md:grid-cols-3">
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
@@ -231,27 +242,50 @@ export default function ReembolsoPage() {
 
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
           <p>Solicitações</p>
-          <h2 className="text-3xl font-black">
-            {reembolsos.length}
-          </h2>
+          <h2 className="text-3xl font-black">{reembolsos.length}</h2>
         </div>
       </div>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">
-          Solicitar Reembolso
-        </h2>
+        <h2 className="text-3xl font-bold">Solicitar Reembolso</h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <input value={passaporte} onChange={(e) => setPassaporte(e.target.value)} placeholder="Passaporte" className="rounded bg-black p-4" />
+          <input
+            value={passaporte}
+            onChange={(e) => setPassaporte(e.target.value)}
+            placeholder="Passaporte"
+            className="rounded bg-black p-4"
+          />
 
-          <input value={nome} onChange={(e) => setNome(e.target.value)} placeholder="Nome" className="rounded bg-black p-4" />
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            placeholder="Nome"
+            className="rounded bg-black p-4"
+          />
 
-          <input value={item} onChange={(e) => setItem(e.target.value)} placeholder="Item Produzido" className="rounded bg-black p-4" />
+          <input
+            value={item}
+            onChange={(e) => setItem(e.target.value)}
+            placeholder="Item Produzido"
+            className="rounded bg-black p-4"
+          />
 
-          <input value={quantidade} onChange={(e) => setQuantidade(e.target.value)} placeholder="Quantidade" type="number" className="rounded bg-black p-4" />
+          <input
+            value={quantidade}
+            onChange={(e) => setQuantidade(e.target.value)}
+            placeholder="Quantidade"
+            type="number"
+            className="rounded bg-black p-4"
+          />
 
-          <input value={valor} onChange={(e) => setValor(e.target.value)} placeholder="Valor Pago" type="number" className="rounded bg-black p-4" />
+          <input
+            value={valor}
+            onChange={(e) => setValor(e.target.value)}
+            placeholder="Valor Pago"
+            type="number"
+            className="rounded bg-black p-4"
+          />
 
           <input
             type="file"
@@ -272,17 +306,18 @@ export default function ReembolsoPage() {
         </button>
       </section>
 
-      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="mb-5 text-3xl font-bold">
-          Histórico de Reembolsos
+      <section className="mt-8 rounded-xl border border-yellow-700 bg-zinc-950 p-6">
+        <h2 className="mb-5 text-3xl font-bold text-yellow-400">
+          ⏳ Reembolsos Pendentes
         </h2>
 
         <div className="grid gap-4">
-          {reembolsos.map((r) => (
-            <div
-              key={r.id}
-              className="rounded-xl border border-zinc-800 bg-black p-5"
-            >
+          {reembolsosPendentes.length === 0 && (
+            <p className="text-zinc-400">Nenhum reembolso pendente.</p>
+          )}
+
+          {reembolsosPendentes.map((r) => (
+            <div key={r.id} className="rounded-xl border border-zinc-800 bg-black p-5">
               <h3 className="text-xl font-bold">
                 {r.nome} - Passaporte {r.passaporte}
               </h3>
@@ -290,7 +325,9 @@ export default function ReembolsoPage() {
               <p>Item: {r.item}</p>
               <p>Quantidade: {r.quantidade}</p>
               <p>Valor: {formatarDinheiro(r.valor)}</p>
+              <p>Solicitado por: {r.solicitadoPor}</p>
               <p>Data: {formatarData(r.criadoEm)}</p>
+              <p className="mt-2 font-bold text-yellow-400">Status: Pendente</p>
 
               {r.foto && (
                 <img
@@ -300,13 +337,49 @@ export default function ReembolsoPage() {
                 />
               )}
 
-              {podePagar && r.status === "pendente" && (
+              {podePagar && (
                 <button
                   onClick={() => marcarComoPago(r.id)}
                   className="mt-4 rounded bg-green-700 px-4 py-2 font-bold"
                 >
                   Marcar como Pago
                 </button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="mt-8 rounded-xl border border-green-700 bg-zinc-950 p-6">
+        <h2 className="mb-5 text-3xl font-bold text-green-400">
+          ✅ Histórico de Pagos
+        </h2>
+
+        <div className="grid gap-4">
+          {reembolsosPagos.length === 0 && (
+            <p className="text-zinc-400">Nenhum reembolso pago ainda.</p>
+          )}
+
+          {reembolsosPagos.map((r) => (
+            <div key={r.id} className="rounded-xl border border-zinc-800 bg-black p-5">
+              <h3 className="text-xl font-bold">
+                {r.nome} - Passaporte {r.passaporte}
+              </h3>
+
+              <p>Item: {r.item}</p>
+              <p>Quantidade: {r.quantidade}</p>
+              <p>Valor: {formatarDinheiro(r.valor)}</p>
+              <p>Solicitado por: {r.solicitadoPor}</p>
+              <p>Solicitado em: {formatarData(r.criadoEm)}</p>
+              <p>Pago em: {formatarData(r.pagoEm)}</p>
+              <p className="mt-2 font-bold text-green-400">Status: Pago</p>
+
+              {r.foto && (
+                <img
+                  src={r.foto}
+                  alt="Produto"
+                  className="mt-3 h-40 rounded-lg border border-zinc-700"
+                />
               )}
             </div>
           ))}

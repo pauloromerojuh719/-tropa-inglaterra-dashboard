@@ -13,7 +13,9 @@ type Farm = {
   opios: number;
   seringas: number;
   agulhas: number;
+  print?: string;
   status: string;
+  criadoEm?: any;
 };
 
 type ResumoMembro = {
@@ -29,16 +31,25 @@ type ResumoMembro = {
 
 export default function ControleFarmPage() {
   const [resumo, setResumo] = useState<ResumoMembro[]>([]);
+  const [farms, setFarms] = useState<Farm[]>([]);
+  const [membroSelecionado, setMembroSelecionado] =
+    useState<ResumoMembro | null>(null);
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
     carregarControleFarm();
   }, []);
 
+  function formatarData(data: any) {
+    if (!data?.toDate) return "Sem data";
+    return data.toDate().toLocaleString("pt-BR");
+  }
+
   async function carregarControleFarm() {
     const snapshot = await getDocs(collection(db, "farm"));
 
     const mapa: Record<string, ResumoMembro> = {};
+    const listaFarms: Farm[] = [];
 
     snapshot.docs.forEach((docItem) => {
       const farm = {
@@ -47,6 +58,8 @@ export default function ControleFarmPage() {
       };
 
       if (farm.status !== "aprovado") return;
+
+      listaFarms.push(farm);
 
       const chave = farm.membroId || farm.membroEmail || farm.membroNome;
 
@@ -78,6 +91,7 @@ export default function ControleFarmPage() {
     const lista = Object.values(mapa).sort((a, b) => b.total - a.total);
 
     setResumo(lista);
+    setFarms(listaFarms);
     setCarregando(false);
   }
 
@@ -90,6 +104,29 @@ export default function ControleFarmPage() {
 
     return bateu ? "✅ Meta batida" : "⚠️ Falta farm";
   }
+
+  function farmsDoMembro() {
+    if (!membroSelecionado) return [];
+
+    return farms
+      .filter((farm) => {
+        const chaveFarm = farm.membroId || farm.membroEmail || farm.membroNome;
+        const chaveMembro =
+          membroSelecionado.membroId ||
+          membroSelecionado.membroEmail ||
+          membroSelecionado.membroNome;
+
+        return chaveFarm === chaveMembro;
+      })
+      .sort((a, b) => {
+        const dataA = a.criadoEm?.toDate?.()?.getTime?.() || 0;
+        const dataB = b.criadoEm?.toDate?.()?.getTime?.() || 0;
+        return dataB - dataA;
+      });
+  }
+
+  const listaFarmsMembro = farmsDoMembro();
+  const ultimoFarm = listaFarmsMembro[0];
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
@@ -133,6 +170,13 @@ export default function ControleFarmPage() {
                     <p className="mt-2 font-bold text-red-400">
                       {statusMeta(membro)}
                     </p>
+
+                    <button
+                      onClick={() => setMembroSelecionado(membro)}
+                      className="mt-4 rounded bg-red-700 px-4 py-2 font-bold"
+                    >
+                      Ver Perfil Farm
+                    </button>
                   </div>
 
                   <div className="grid gap-3 text-right md:grid-cols-5">
@@ -169,6 +213,102 @@ export default function ControleFarmPage() {
           </div>
         )}
       </section>
+
+      {membroSelecionado && (
+        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-3xl font-black text-red-500">
+              👤 {membroSelecionado.membroNome}
+            </h2>
+
+            <button
+              onClick={() => setMembroSelecionado(null)}
+              className="rounded bg-zinc-800 px-4 py-2 font-bold"
+            >
+              Fechar
+            </button>
+          </div>
+
+          <p className="mt-2 text-zinc-400">
+            {membroSelecionado.membroEmail}
+          </p>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-5">
+            <div className="rounded bg-black p-4">
+              <p className="text-zinc-400">🍃 Folhas</p>
+              <h3 className="text-2xl font-black">{membroSelecionado.folhas}</h3>
+            </div>
+
+            <div className="rounded bg-black p-4">
+              <p className="text-zinc-400">💊 Ópios</p>
+              <h3 className="text-2xl font-black">{membroSelecionado.opios}</h3>
+            </div>
+
+            <div className="rounded bg-black p-4">
+              <p className="text-zinc-400">💉 Seringas</p>
+              <h3 className="text-2xl font-black">
+                {membroSelecionado.seringas}
+              </h3>
+            </div>
+
+            <div className="rounded bg-black p-4">
+              <p className="text-zinc-400">🪡 Agulhas</p>
+              <h3 className="text-2xl font-black">
+                {membroSelecionado.agulhas}
+              </h3>
+            </div>
+
+            <div className="rounded bg-black p-4">
+              <p className="text-zinc-400">📦 Total</p>
+              <h3 className="text-2xl font-black text-red-500">
+                {membroSelecionado.total}
+              </h3>
+            </div>
+          </div>
+
+          <div className="mt-6 rounded bg-black p-4">
+            <p className="font-bold">🎯 Status: {statusMeta(membroSelecionado)}</p>
+            <p className="mt-2">
+              🕒 Último farm:{" "}
+              {ultimoFarm ? formatarData(ultimoFarm.criadoEm) : "Sem farm"}
+            </p>
+            <p className="mt-2">
+              🖼️ Prints enviados: {listaFarmsMembro.length}
+            </p>
+          </div>
+
+          <h3 className="mt-8 text-2xl font-bold">📸 Prints enviados</h3>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            {listaFarmsMembro.length === 0 ? (
+              <p className="text-zinc-400">Nenhum print encontrado.</p>
+            ) : (
+              listaFarmsMembro.map((farm) => (
+                <div
+                  key={farm.id}
+                  className="rounded-xl border border-zinc-800 bg-black p-4"
+                >
+                  <p>🍃 Folhas: {farm.folhas}</p>
+                  <p>💊 Ópios: {farm.opios}</p>
+                  <p>💉 Seringas: {farm.seringas}</p>
+                  <p>🪡 Agulhas: {farm.agulhas}</p>
+                  <p className="mt-2 text-zinc-400">
+                    Data: {formatarData(farm.criadoEm)}
+                  </p>
+
+                  {farm.print && (
+                    <img
+                      src={farm.print}
+                      alt="Print do farm"
+                      className="mt-3 h-40 rounded border border-zinc-700"
+                    />
+                  )}
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+      )}
     </main>
   );
 }

@@ -19,6 +19,7 @@ type Membro = {
 
 type Venda = {
   id: string;
+  tipo: "Família" | "Membro";
   item: string;
   quantidade: number;
   valor: number;
@@ -32,6 +33,7 @@ export default function VendasPage() {
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
 
+  const [tipo, setTipo] = useState<"Família" | "Membro">("Família");
   const [item, setItem] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [valor, setValor] = useState("");
@@ -92,6 +94,7 @@ export default function VendasPage() {
     }
 
     await addDoc(collection(db, "vendas"), {
+      tipo,
       item,
       quantidade: Number(quantidade),
       valor: Number(valor),
@@ -99,6 +102,7 @@ export default function VendasPage() {
       criadoEm: Timestamp.now(),
     });
 
+    setTipo("Família");
     setItem("");
     setQuantidade("");
     setValor("");
@@ -117,9 +121,7 @@ export default function VendasPage() {
 
       const discordId = (session.user as any).id;
 
-      const membroSnap = await getDoc(
-        doc(db, "membros", discordId)
-      );
+      const membroSnap = await getDoc(doc(db, "membros", discordId));
 
       if (!membroSnap.exists()) {
         setCarregando(false);
@@ -130,12 +132,10 @@ export default function VendasPage() {
 
       if (
         membro.status === "aprovado" &&
-        (
-          membro.cargo === "Líder" ||
+        (membro.cargo === "Líder" ||
           membro.cargo === "Vice-Líder" ||
           membro.cargo === "Gerente Geral" ||
-          membro.cargo === "Gerente de Vendas"
-        )
+          membro.cargo === "Gerente de Vendas")
       ) {
         setTemPermissao(true);
         await carregarVendas();
@@ -166,12 +166,18 @@ export default function VendasPage() {
     })
     .reduce((total, venda) => total + venda.valor, 0);
 
+  const totalFamilia = vendas
+    .filter((venda) => venda.tipo === "Família")
+    .reduce((total, venda) => total + venda.valor, 0);
+
+  const totalMembro = vendas
+    .filter((venda) => venda.tipo === "Membro")
+    .reduce((total, venda) => total + venda.valor, 0);
+
   if (carregando) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-black text-white">
-        <h1 className="text-4xl font-black text-red-600">
-          Carregando...
-        </h1>
+        <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
       </main>
     );
   }
@@ -192,18 +198,14 @@ export default function VendasPage() {
   if (!temPermissao) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-black text-white">
-        <h1 className="text-5xl font-black text-red-600">
-          ❌ ACESSO NEGADO
-        </h1>
+        <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
       </main>
     );
   }
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="text-5xl font-black text-red-600">
-        💰 VENDAS
-      </h1>
+      <h1 className="text-5xl font-black text-red-600">💰 VENDAS</h1>
 
       <div className="mt-8 grid gap-6 md:grid-cols-4">
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
@@ -221,26 +223,33 @@ export default function VendasPage() {
         </div>
 
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
-          <p>Total Vendido</p>
-          <h2 className="text-3xl font-black">
-            {formatarDinheiro(totalVendido)}
+          <p>Família</p>
+          <h2 className="text-3xl font-black text-yellow-400">
+            {formatarDinheiro(totalFamilia)}
           </h2>
         </div>
 
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
-          <p>Registros</p>
-          <h2 className="text-3xl font-black">
-            {vendas.length}
+          <p>Membro</p>
+          <h2 className="text-3xl font-black text-green-400">
+            {formatarDinheiro(totalMembro)}
           </h2>
         </div>
       </div>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">
-          Registrar Venda
-        </h2>
+        <h2 className="text-3xl font-bold">Registrar Venda</h2>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-3">
+        <div className="mt-5 grid gap-4 md:grid-cols-4">
+          <select
+            value={tipo}
+            onChange={(e) => setTipo(e.target.value as "Família" | "Membro")}
+            className="rounded bg-black p-4"
+          >
+            <option value="Família">Família</option>
+            <option value="Membro">Membro</option>
+          </select>
+
           <input
             placeholder="Item"
             value={item}
@@ -274,9 +283,7 @@ export default function VendasPage() {
       </section>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="mb-5 text-3xl font-bold">
-          Histórico de Vendas
-        </h2>
+        <h2 className="mb-5 text-3xl font-bold">Histórico de Vendas</h2>
 
         <div className="grid gap-4">
           {vendas.map((venda) => (
@@ -284,10 +291,14 @@ export default function VendasPage() {
               key={venda.id}
               className="rounded-xl border border-zinc-800 bg-black p-5"
             >
-              <h3 className="text-2xl font-bold">
-                💰 {venda.item}
-              </h3>
+              <h3 className="text-2xl font-bold">💰 {venda.item}</h3>
 
+              <p>
+                Tipo:{" "}
+                <span className="font-bold text-red-400">
+                  {venda.tipo || "Sem tipo"}
+                </span>
+              </p>
               <p>Quantidade: {venda.quantidade}</p>
               <p>Vendedor: {venda.vendedor}</p>
               <p>Data: {formatarData(venda.criadoEm)}</p>
