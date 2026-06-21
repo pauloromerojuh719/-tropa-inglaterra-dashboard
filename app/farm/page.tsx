@@ -1,173 +1,147 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { useState } from "react";
+import { useSession, signIn } from "next-auth/react";
+import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
-type Farm = {
-  id: string;
-  membroNome: string;
-  membroEmail: string;
-  membroId: string;
-  folhas: number;
-  opios: number;
-  seringas: number;
-  agulhas: number;
-  status: string;
-};
+export default function FarmPage() {
+  const { data: session } = useSession();
 
-type ResumoMembro = {
-  membroNome: string;
-  membroEmail: string;
-  membroId: string;
-  folhas: number;
-  opios: number;
-  seringas: number;
-  agulhas: number;
-  total: number;
-};
+  const [folhas, setFolhas] = useState("");
+  const [opios, setOpios] = useState("");
+  const [seringas, setSeringas] = useState("");
+  const [agulhas, setAgulhas] = useState("");
+  const [print, setPrint] = useState("");
+  const [enviando, setEnviando] = useState(false);
 
-export default function ControleFarmPage() {
-  const [resumo, setResumo] = useState<ResumoMembro[]>([]);
-  const [carregando, setCarregando] = useState(true);
+  function converterPrint(arquivo: File) {
+    const reader = new FileReader();
 
-  useEffect(() => {
-    carregarControleFarm();
-  }, []);
+    reader.onloadend = () => {
+      setPrint(reader.result as string);
+    };
 
-  async function carregarControleFarm() {
-    const snapshot = await getDocs(collection(db, "farm"));
-
-    const mapa: Record<string, ResumoMembro> = {};
-
-    snapshot.docs.forEach((docItem) => {
-      const farm = {
-        id: docItem.id,
-        ...(docItem.data() as Omit<Farm, "id">),
-      };
-
-      if (farm.status !== "aprovado") return;
-
-      const chave = farm.membroId || farm.membroEmail || farm.membroNome;
-
-      if (!mapa[chave]) {
-        mapa[chave] = {
-          membroNome: farm.membroNome || "Sem nome",
-          membroEmail: farm.membroEmail || "",
-          membroId: farm.membroId || "",
-          folhas: 0,
-          opios: 0,
-          seringas: 0,
-          agulhas: 0,
-          total: 0,
-        };
-      }
-
-      mapa[chave].folhas += Number(farm.folhas || 0);
-      mapa[chave].opios += Number(farm.opios || 0);
-      mapa[chave].seringas += Number(farm.seringas || 0);
-      mapa[chave].agulhas += Number(farm.agulhas || 0);
-
-      mapa[chave].total =
-        mapa[chave].folhas +
-        mapa[chave].opios +
-        mapa[chave].seringas +
-        mapa[chave].agulhas;
-    });
-
-    const lista = Object.values(mapa).sort((a, b) => b.total - a.total);
-
-    setResumo(lista);
-    setCarregando(false);
+    reader.readAsDataURL(arquivo);
   }
 
-  function statusMeta(membro: ResumoMembro) {
-    const bateu =
-      membro.folhas >= 2000 &&
-      membro.opios >= 2000 &&
-      membro.seringas >= 800 &&
-      membro.agulhas >= 800;
+  async function enviarFarm() {
+    if (!session?.user) return;
 
-    return bateu ? "✅ Meta batida" : "⚠️ Falta farm";
+    if (!folhas && !opios && !seringas && !agulhas) {
+      alert("Preencha pelo menos uma quantidade.");
+      return;
+    }
+
+    if (!print) {
+      alert("Envie o print do farm.");
+      return;
+    }
+
+    setEnviando(true);
+
+    await addDoc(collection(db, "farm"), {
+      membroNome: session.user.name || "Sem nome",
+      membroEmail: session.user.email || "",
+      membroId: (session.user as any).id || "",
+      folhas: Number(folhas || 0),
+      opios: Number(opios || 0),
+      seringas: Number(seringas || 0),
+      agulhas: Number(agulhas || 0),
+      print,
+      status: "pendente",
+      criadoEm: Timestamp.now(),
+    });
+
+    setFolhas("");
+    setOpios("");
+    setSeringas("");
+    setAgulhas("");
+    setPrint("");
+    setEnviando(false);
+
+    alert("Farm enviado para aprovação!");
+  }
+
+  if (!session) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+        <button
+          onClick={() => signIn("discord")}
+          className="rounded bg-red-700 px-6 py-3 font-bold"
+        >
+          Entrar com Discord
+        </button>
+      </main>
+    );
   }
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="text-5xl font-black text-red-600">
-        🌿 CONTROLE DE FARM
-      </h1>
+      <h1 className="text-5xl font-black text-red-600">📦 FARM</h1>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">Resumo dos Membros</h2>
+        <h2 className="text-3xl font-bold">Enviar Farm</h2>
 
-        {carregando ? (
-          <p className="mt-4 text-zinc-400">Carregando farms...</p>
-        ) : resumo.length === 0 ? (
-          <p className="mt-4 text-zinc-400">
-            Nenhum farm aprovado encontrado ainda.
-          </p>
-        ) : (
-          <div className="mt-6 grid gap-4">
-            {resumo.map((membro, index) => (
-              <div
-                key={membro.membroId || membro.membroEmail || membro.membroNome}
-                className="rounded-xl border border-zinc-800 bg-black p-5"
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h3 className="text-2xl font-black">
-                      {index === 0
-                        ? "🥇"
-                        : index === 1
-                        ? "🥈"
-                        : index === 2
-                        ? "🥉"
-                        : `#${index + 1}`}{" "}
-                      {membro.membroNome}
-                    </h3>
+        <div className="mt-6 grid gap-4 md:grid-cols-2">
+          <input
+            placeholder="🍃 Folhas"
+            type="number"
+            value={folhas}
+            onChange={(e) => setFolhas(e.target.value)}
+            className="rounded bg-black p-4"
+          />
 
-                    <p className="mt-1 text-zinc-400">
-                      {membro.membroEmail}
-                    </p>
+          <input
+            placeholder="💊 Ópios"
+            type="number"
+            value={opios}
+            onChange={(e) => setOpios(e.target.value)}
+            className="rounded bg-black p-4"
+          />
 
-                    <p className="mt-2 font-bold text-red-400">
-                      {statusMeta(membro)}
-                    </p>
-                  </div>
+          <input
+            placeholder="💉 Seringas"
+            type="number"
+            value={seringas}
+            onChange={(e) => setSeringas(e.target.value)}
+            className="rounded bg-black p-4"
+          />
 
-                  <div className="grid gap-3 text-right md:grid-cols-5">
-                    <div>
-                      <p className="text-sm text-zinc-400">Folhas</p>
-                      <p className="text-xl font-black">{membro.folhas}</p>
-                    </div>
+          <input
+            placeholder="🪡 Agulhas"
+            type="number"
+            value={agulhas}
+            onChange={(e) => setAgulhas(e.target.value)}
+            className="rounded bg-black p-4"
+          />
 
-                    <div>
-                      <p className="text-sm text-zinc-400">Ópios</p>
-                      <p className="text-xl font-black">{membro.opios}</p>
-                    </div>
+          <input
+            type="file"
+            accept="image/*"
+            className="rounded bg-black p-4 md:col-span-2"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+              if (arquivo) converterPrint(arquivo);
+            }}
+          />
+        </div>
 
-                    <div>
-                      <p className="text-sm text-zinc-400">Seringas</p>
-                      <p className="text-xl font-black">{membro.seringas}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-zinc-400">Agulhas</p>
-                      <p className="text-xl font-black">{membro.agulhas}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-zinc-400">Total</p>
-                      <p className="text-xl font-black text-red-500">
-                        {membro.total}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
+        {print && (
+          <img
+            src={print}
+            alt="Print do farm"
+            className="mt-5 h-40 rounded border border-zinc-700"
+          />
         )}
+
+        <button
+          onClick={enviarFarm}
+          disabled={enviando}
+          className="mt-6 rounded bg-red-700 px-6 py-3 font-bold disabled:opacity-50"
+        >
+          {enviando ? "Enviando..." : "Enviar Farm"}
+        </button>
       </section>
     </main>
   );
