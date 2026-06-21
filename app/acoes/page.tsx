@@ -24,19 +24,21 @@ type Acao = {
   participantes: number;
   valor: number;
   observacao: string;
+  familiaRival?: string;
   registradoPor: string;
   criadoEm: any;
 };
 
 const limites: Record<string, number> = {
-  "Joalheria": 1,
-  "Concessionária": 1,
-  "Fleeca": 2,
-  "Açougue": 1,
-  "Galinheiro": 1,
+  Joalheria: 1,
+  Concessionária: 1,
+  Fleeca: 2,
+  Açougue: 1,
+  Galinheiro: 1,
   "Central do Mergulhador": 1,
   "Banco Central": 1,
   "Banco Paleto": 1,
+  Desafio: 999,
 };
 
 const tiposAcoes = Object.keys(limites);
@@ -52,6 +54,7 @@ export default function AcoesPage() {
   const [participantes, setParticipantes] = useState("");
   const [valor, setValor] = useState("");
   const [observacao, setObservacao] = useState("");
+  const [familiaRival, setFamiliaRival] = useState("");
 
   const [acoes, setAcoes] = useState<Acao[]>([]);
 
@@ -104,12 +107,18 @@ export default function AcoesPage() {
       return;
     }
 
+    if (tipo === "Desafio" && !familiaRival) {
+      alert("Preencha a família rival.");
+      return;
+    }
+
     await addDoc(collection(db, "acoes"), {
       tipo,
       status,
       participantes: Number(participantes),
       valor: Number(valor),
       observacao,
+      familiaRival: tipo === "Desafio" ? familiaRival : "",
       registradoPor: session.user.name || "Sem nome",
       criadoEm: Timestamp.now(),
     });
@@ -119,6 +128,7 @@ export default function AcoesPage() {
     setParticipantes("");
     setValor("");
     setObservacao("");
+    setFamiliaRival("");
 
     await carregarAcoes();
 
@@ -172,6 +182,14 @@ export default function AcoesPage() {
     0
   );
 
+  const desafiosVencidos = acoesSemana.filter(
+    (acao) => acao.tipo === "Desafio" && acao.status === "Sucesso"
+  ).length;
+
+  const desafiosPerdidos = acoesSemana.filter(
+    (acao) => acao.tipo === "Desafio" && acao.status === "Falhou"
+  ).length;
+
   function quantidadeNaSemana(tipoAcao: string) {
     return acoesSemana.filter((acao) => acao.tipo === tipoAcao).length;
   }
@@ -211,7 +229,7 @@ export default function AcoesPage() {
     <main className="min-h-screen bg-black p-10 text-white">
       <h1 className="text-5xl font-black text-red-600">🎯 AÇÕES</h1>
 
-      <div className="mt-8 grid gap-6 md:grid-cols-3">
+      <div className="mt-8 grid gap-6 md:grid-cols-5">
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
           <p>Ações da Semana</p>
           <h2 className="text-3xl font-black text-red-500">{totalSemana}</h2>
@@ -221,6 +239,20 @@ export default function AcoesPage() {
           <p>Valor da Semana</p>
           <h2 className="text-3xl font-black text-green-400">
             {formatarDinheiro(valorSemana)}
+          </h2>
+        </div>
+
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <p>Desafios Vencidos</p>
+          <h2 className="text-3xl font-black text-green-400">
+            {desafiosVencidos}
+          </h2>
+        </div>
+
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <p>Desafios Perdidos</p>
+          <h2 className="text-3xl font-black text-red-400">
+            {desafiosPerdidos}
           </h2>
         </div>
 
@@ -241,13 +273,25 @@ export default function AcoesPage() {
 
             return (
               <div key={tipoAcao} className="rounded bg-black p-4">
-                <p className="font-bold">{tipoAcao}</p>
-                <p className={atingiu ? "text-red-500" : "text-green-400"}>
-                  {usado}/{limite}
+                <p className="font-bold">
+                  {tipoAcao === "Desafio" ? "⚔️ Desafio" : tipoAcao}
                 </p>
-                <p className="text-sm text-zinc-400">
-                  {atingiu ? "🚫 Limite atingido" : "✅ Disponível"}
-                </p>
+
+                {tipoAcao === "Desafio" ? (
+                  <>
+                    <p className="text-green-400">{usado} registrado(s)</p>
+                    <p className="text-sm text-zinc-400">Sem limite semanal</p>
+                  </>
+                ) : (
+                  <>
+                    <p className={atingiu ? "text-red-500" : "text-green-400"}>
+                      {usado}/{limite}
+                    </p>
+                    <p className="text-sm text-zinc-400">
+                      {atingiu ? "🚫 Limite atingido" : "✅ Disponível"}
+                    </p>
+                  </>
+                )}
               </div>
             );
           })}
@@ -265,7 +309,7 @@ export default function AcoesPage() {
           >
             {tiposAcoes.map((tipoAcao) => (
               <option key={tipoAcao} value={tipoAcao}>
-                {tipoAcao}
+                {tipoAcao === "Desafio" ? "⚔️ Desafio" : tipoAcao}
               </option>
             ))}
           </select>
@@ -275,9 +319,18 @@ export default function AcoesPage() {
             onChange={(e) => setStatus(e.target.value as "Sucesso" | "Falhou")}
             className="rounded bg-black p-4"
           >
-            <option value="Sucesso">Sucesso</option>
-            <option value="Falhou">Falhou</option>
+            <option value="Sucesso">Sucesso / Vitória</option>
+            <option value="Falhou">Falhou / Derrota</option>
           </select>
+
+          {tipo === "Desafio" && (
+            <input
+              placeholder="Família rival"
+              value={familiaRival}
+              onChange={(e) => setFamiliaRival(e.target.value)}
+              className="rounded bg-black p-4 md:col-span-2"
+            />
+          )}
 
           <input
             placeholder="Participantes"
@@ -288,7 +341,7 @@ export default function AcoesPage() {
           />
 
           <input
-            placeholder="Valor"
+            placeholder={tipo === "Desafio" ? "Premiação / Valor" : "Valor"}
             type="number"
             value={valor}
             onChange={(e) => setValor(e.target.value)}
@@ -320,18 +373,39 @@ export default function AcoesPage() {
               key={acao.id}
               className="rounded-xl border border-zinc-800 bg-black p-5"
             >
-              <h3 className="text-2xl font-bold">🎯 {acao.tipo}</h3>
+              <h3 className="text-2xl font-bold">
+                {acao.tipo === "Desafio" ? "⚔️ Desafio" : `🎯 ${acao.tipo}`}
+              </h3>
 
-              <p>Status: {acao.status}</p>
+              {acao.tipo === "Desafio" && (
+                <p>
+                  Família Rival:{" "}
+                  <span className="font-bold text-yellow-400">
+                    {acao.familiaRival || "Não informado"}
+                  </span>
+                </p>
+              )}
+
+              <p>
+                Resultado:{" "}
+                <span
+                  className={
+                    acao.status === "Sucesso"
+                      ? "font-bold text-green-400"
+                      : "font-bold text-red-400"
+                  }
+                >
+                  {acao.status === "Sucesso" ? "Vitória" : "Derrota"}
+                </span>
+              </p>
+
               <p>Participantes: {acao.participantes}</p>
               <p>Valor: {formatarDinheiro(acao.valor)}</p>
               <p>Registrado por: {acao.registradoPor}</p>
               <p>Data: {formatarData(acao.criadoEm)}</p>
 
               {acao.observacao && (
-                <p className="mt-2 text-zinc-400">
-                  Obs: {acao.observacao}
-                </p>
+                <p className="mt-2 text-zinc-400">Obs: {acao.observacao}</p>
               )}
             </div>
           ))}

@@ -20,6 +20,7 @@ type Membro = {
 type Venda = {
   id: string;
   tipo: "Família" | "Membro";
+  comprador?: string;
   item: string;
   quantidade: number;
   valor: number;
@@ -34,6 +35,7 @@ export default function VendasPage() {
   const [temPermissao, setTemPermissao] = useState(false);
 
   const [tipo, setTipo] = useState<"Família" | "Membro">("Família");
+  const [comprador, setComprador] = useState("");
   const [item, setItem] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [valor, setValor] = useState("");
@@ -88,13 +90,14 @@ export default function VendasPage() {
   async function salvarVenda() {
     if (!session?.user) return;
 
-    if (!item || !quantidade || !valor) {
+    if (!comprador || !item || !quantidade || !valor) {
       alert("Preencha todos os campos.");
       return;
     }
 
     await addDoc(collection(db, "vendas"), {
       tipo,
+      comprador,
       item,
       quantidade: Number(quantidade),
       valor: Number(valor),
@@ -103,6 +106,7 @@ export default function VendasPage() {
     });
 
     setTipo("Família");
+    setComprador("");
     setItem("");
     setQuantidade("");
     setValor("");
@@ -146,11 +150,6 @@ export default function VendasPage() {
 
     verificarPermissao();
   }, [session]);
-
-  const totalVendido = vendas.reduce(
-    (total, venda) => total + (venda.valor || 0),
-    0
-  );
 
   const vendaSemana = vendas
     .filter((venda) => {
@@ -240,7 +239,7 @@ export default function VendasPage() {
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="text-3xl font-bold">Registrar Venda</h2>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-4">
+        <div className="mt-5 grid gap-4 md:grid-cols-5">
           <select
             value={tipo}
             onChange={(e) => setTipo(e.target.value as "Família" | "Membro")}
@@ -249,6 +248,17 @@ export default function VendasPage() {
             <option value="Família">Família</option>
             <option value="Membro">Membro</option>
           </select>
+
+          <input
+            placeholder={
+              tipo === "Família"
+                ? "Nome da família"
+                : "Nome do membro"
+            }
+            value={comprador}
+            onChange={(e) => setComprador(e.target.value)}
+            className="rounded bg-black p-4"
+          />
 
           <input
             placeholder="Item"
@@ -299,6 +309,14 @@ export default function VendasPage() {
                   {venda.tipo || "Sem tipo"}
                 </span>
               </p>
+
+              <p>
+                Comprador:{" "}
+                <span className="font-bold text-yellow-400">
+                  {venda.comprador || "Não informado"}
+                </span>
+              </p>
+
               <p>Quantidade: {venda.quantidade}</p>
               <p>Vendedor: {venda.vendedor}</p>
               <p>Data: {formatarData(venda.criadoEm)}</p>
