@@ -24,6 +24,7 @@ type Membro = {
   discordId: string;
   nomeRP?: string;
   passaporte?: string;
+  numeroBau?: string;
   status: "cadastro" | "pendente" | "aprovado";
   cargo: string;
 };
@@ -59,20 +60,15 @@ export default function Home() {
   const [avisos, setAvisos] = useState<Aviso[]>([]);
   const [nomeRP, setNomeRP] = useState("");
   const [passaporte, setPassaporte] = useState("");
+  const [numeroBau, setNumeroBau] = useState("");
 
   const [folhasMeta, setFolhasMeta] = useState(0);
   const [opiosMeta, setOpiosMeta] = useState(0);
   const [seringasMeta, setSeringasMeta] = useState(0);
   const [agulhasMeta, setAgulhasMeta] = useState(0);
-  const [posicaoRanking, setPosicaoRanking] = useState("-");
 
   const [plantaoAberto, setPlantaoAberto] = useState<Plantao | null>(null);
   const [totalMinutosPlantao, setTotalMinutosPlantao] = useState(0);
-
-const [totalMembros, setTotalMembros] = useState(0);
-const [totalFarmGeral, setTotalFarmGeral] = useState(0);
-const [totalCompras, setTotalCompras] = useState(0);
-const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
 
   const cargoLimpo = membro?.cargo?.trim();
 
@@ -88,12 +84,8 @@ const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
   const totalFarm = folhasMeta + opiosMeta + seringasMeta + agulhasMeta;
   const totalMeta = 2000 + 2000 + 800 + 800;
 
-  const porcentagemMeta = Math.min(
-    Math.round((totalFarm / totalMeta) * 100),
-    100
-  );
-
-  const statusMeta = isElite ? "ISENTO" : totalFarm >= totalMeta ? "META BATIDA" : "EM ANDAMENTO";
+  const statusMeta =
+    isElite ? "ISENTO" : totalFarm >= totalMeta ? "META BATIDA" : "EM ANDAMENTO";
 
   function formatarMinutos(minutos: number) {
     const horas = Math.floor(minutos / 60);
@@ -164,9 +156,7 @@ const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
     });
 
     await buscarPlantoes();
-  }
-
-  useEffect(() => {
+  }  useEffect(() => {
     async function buscarMembro() {
       if (!session?.user) return;
 
@@ -183,6 +173,7 @@ const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
           discordId,
           nomeRP: "",
           passaporte: "",
+          numeroBau: "",
           status: "cadastro",
           cargo: "Nenhum",
         };
@@ -204,60 +195,8 @@ const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
 
       setAvisos(lista.reverse());
     }
-async function buscarDashboardGeral() {
-  const membrosSnap = await getDocs(collection(db, "membros"));
 
-  const membrosAprovados = membrosSnap.docs.filter((item) => {
-    const dados = item.data() as Membro;
-    return dados.status === "aprovado";
-  });
-
-  setTotalMembros(membrosAprovados.length);
-
-  const farmSnap = await getDocs(
-    query(collection(db, "farm"), where("status", "==", "aprovado"))
-  );
-
-  let somaFarm = 0;
-
-  farmSnap.docs.forEach((item) => {
-    const farm = item.data() as Farm;
-
-    somaFarm +=
-      (farm.folhas || 0) +
-      (farm.opios || 0) +
-      (farm.seringas || 0) +
-      (farm.agulhas || 0);
-  });
-
-  setTotalFarmGeral(somaFarm);
-
-  const comprasSnap = await getDocs(collection(db, "compras"));
-
-  let somaCompras = 0;
-
-  comprasSnap.docs.forEach((item) => {
-    const compra = item.data() as any;
-    somaCompras += compra.valor || 0;
-  });
-
-  setTotalCompras(somaCompras);
-
-  const reembolsoSnap = await getDocs(collection(db, "reembolsos"));
-
-  let somaReembolsoPendente = 0;
-
-  reembolsoSnap.docs.forEach((item) => {
-    const reembolso = item.data() as any;
-
-    if (reembolso.status === "pendente") {
-      somaReembolsoPendente += reembolso.valor || 0;
-    }
-  });
-
-  setReembolsosPendentes(somaReembolsoPendente);
-}
-    async function buscarMinhaMetaERanking() {
+    async function buscarMinhaMeta() {
       if (!session?.user) return;
 
       const discordId = (session.user as any).id;
@@ -267,8 +206,6 @@ async function buscarDashboardGeral() {
         query(collection(db, "farm"), where("status", "==", "aprovado"))
       );
 
-      const ranking: Record<string, number> = {};
-
       let minhasFolhas = 0;
       let meusOpios = 0;
       let minhasSeringas = 0;
@@ -276,16 +213,6 @@ async function buscarDashboardGeral() {
 
       snapshot.docs.forEach((item) => {
         const farm = item.data() as Farm;
-
-        const total =
-          (farm.folhas || 0) +
-          (farm.opios || 0) +
-          (farm.seringas || 0) +
-          (farm.agulhas || 0);
-
-        if (farm.membroId) {
-          ranking[farm.membroId] = (ranking[farm.membroId] || 0) + total;
-        }
 
         if (farm.membroId === discordId) {
           minhasFolhas += farm.folhas || 0;
@@ -299,21 +226,12 @@ async function buscarDashboardGeral() {
       setOpiosMeta(meusOpios);
       setSeringasMeta(minhasSeringas);
       setAgulhasMeta(minhasAgulhas);
-
-      const rankingOrdenado = Object.entries(ranking).sort(
-        (a, b) => b[1] - a[1]
-      );
-
-      const posicao = rankingOrdenado.findIndex(([id]) => id === discordId);
-
-      setPosicaoRanking(posicao >= 0 ? `#${posicao + 1}` : "-");
     }
 
     buscarMembro();
     buscarAvisos();
-    buscarMinhaMetaERanking();
+    buscarMinhaMeta();
     buscarPlantoes();
-    buscarDashboardGeral();
   }, [session]);
 
   async function solicitarEntrada() {
@@ -321,8 +239,8 @@ async function buscarDashboardGeral() {
 
     const discordId = (session.user as any).id;
 
-    if (!nomeRP || !passaporte) {
-      alert("Preencha Nome RP e Passaporte.");
+    if (!nomeRP || !passaporte || !numeroBau) {
+      alert("Preencha Nome RP, Passaporte e Número do Baú.");
       return;
     }
 
@@ -332,6 +250,7 @@ async function buscarDashboardGeral() {
       discordId,
       nomeRP,
       passaporte,
+      numeroBau,
       status: "pendente",
       cargo: "Nenhum",
     };
@@ -376,9 +295,7 @@ async function buscarDashboardGeral() {
         <h1 className="text-4xl">Carregando...</h1>
       </main>
     );
-  }
-
-  if (membro.status === "cadastro") {
+  }  if (membro.status === "cadastro") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="w-full max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8">
@@ -409,6 +326,13 @@ async function buscarDashboardGeral() {
             value={passaporte}
             onChange={(e) => setPassaporte(e.target.value)}
             placeholder="Passaporte"
+            className="mt-4 w-full rounded bg-black p-4"
+          />
+
+          <input
+            value={numeroBau}
+            onChange={(e) => setNumeroBau(e.target.value)}
+            placeholder="Número do Baú"
             className="mt-4 w-full rounded bg-black p-4"
           />
 
@@ -452,6 +376,10 @@ async function buscarDashboardGeral() {
 
           <p className="mt-2 text-xl">
             Passaporte: <strong>{membro.passaporte}</strong>
+          </p>
+
+          <p className="mt-2 text-xl">
+            Baú: <strong>{membro.numeroBau}</strong>
           </p>
 
           <p className="mt-4 text-zinc-400">
@@ -506,63 +434,52 @@ async function buscarDashboardGeral() {
                 🎯 METAS
               </Link>
 
-   <Link
-  href="/farm"
-  className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
->
-  📦 FARM
-</Link>
+              <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                📦 FARM
+              </Link>
 
-{(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral" ||
-  cargoLimpo === "Gerente de Farm") && (
-  <Link
-    href="/controle-farm"
-    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
-  >
-    🌿 CONTROLE FARM
-  </Link>
-)}
-  {(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral" ||
-  cargoLimpo === "Gerente de Compras") && (
-  <Link
-    href="/compras"
-    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
-  >
-    🛒 COMPRAS
-  </Link>
-)}
+              {(cargoLimpo === "Líder" ||
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente Geral" ||
+                cargoLimpo === "Gerente de Farm") && (
+                <Link href="/controle-farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                  🌿 CONTROLE FARM
+                </Link>
+              )}              {(cargoLimpo === "Líder" ||
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente Geral" ||
+                cargoLimpo === "Gerente de Compras") && (
+                <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                  🛒 COMPRAS
+                </Link>
+              )}
 
-{(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral" ||
-  cargoLimpo === "Gerente de Vendas") && (
-  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-    💰 VENDAS
-  </Link>
-)}
+              {(cargoLimpo === "Líder" ||
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente Geral" ||
+                cargoLimpo === "Gerente de Vendas") && (
+                <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                  💰 VENDAS
+                </Link>
+              )}
 
-{(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral" ||
-  cargoLimpo === "Gerente de Produção") && (
-  <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-    🏭 PRODUÇÃO
-  </Link>
-)}{(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral" ||
-  cargoLimpo === "Gerente de Produção") && (
-  <Link
-    href="/reembolso"
-    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
-  >
-    💸 REEMBOLSO
-  </Link>
-)}
+              {(cargoLimpo === "Líder" ||
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente Geral" ||
+                cargoLimpo === "Gerente de Produção") && (
+                <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                  🏭 PRODUÇÃO
+                </Link>
+              )}
+
+              {(cargoLimpo === "Líder" ||
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente Geral" ||
+                cargoLimpo === "Gerente de Produção") && (
+                <Link href="/reembolso" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                  💸 REEMBOLSO
+                </Link>
+              )}
 
               <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 🏆 RANKING
@@ -571,27 +488,24 @@ async function buscarDashboardGeral() {
               <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 👥 MEMBROS
               </Link>
+
               {(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral" ||
-  cargoLimpo === "Gerente de Ações") && (
-  <Link
-    href="/acoes"
-    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
-  >
-    🎯 AÇÕES
-  </Link>
-)}
-{(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral") && (
-  <Link
-    href="/relatorio"
-    className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
-  >
-    📊 RELATÓRIO
-  </Link>
-)}
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente Geral" ||
+                cargoLimpo === "Gerente de Ações") && (
+                <Link href="/acoes" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                  🎯 AÇÕES
+                </Link>
+              )}
+
+              {(cargoLimpo === "Líder" ||
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente Geral") && (
+                <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                  📊 RELATÓRIO
+                </Link>
+              )}
+
               {podeVerAdmin && (
                 <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                   ⚙️ ADMIN
@@ -619,6 +533,10 @@ async function buscarDashboardGeral() {
 
                   <p className="mt-2 text-zinc-400">
                     Passaporte: {membro.passaporte || "Não informado"}
+                  </p>
+
+                  <p className="mt-1 text-zinc-400">
+                    Baú: {membro.numeroBau || "Não informado"}
                   </p>
 
                   <span className="mt-3 inline-block rounded-full bg-red-800 px-4 py-1 text-sm">
@@ -656,70 +574,70 @@ async function buscarDashboardGeral() {
               </div>
             </div>
 
-         <div className="mt-5 grid gap-4 md:grid-cols-2">
-  <Card
-    titulo="HORAS NA CIDADE"
-    valor={formatarMinutos(totalMinutosPlantao)}
-    desc="TOTAL REGISTRADO"
-  />
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <Card
+                titulo="HORAS NA CIDADE"
+                valor={formatarMinutos(totalMinutosPlantao)}
+                desc="TOTAL REGISTRADO"
+              />
 
-  {!isElite && (
-    <Card
-      titulo="STATUS DA META"
-      valor={statusMeta}
-      desc="SEMANA ATUAL"
-    />
-  )}
-</div>
+              {!isElite && (
+                <Card
+                  titulo="STATUS DA META"
+                  valor={statusMeta}
+                  desc="SEMANA ATUAL"
+                />
+              )}
+            </div>
 
-{!isElite && (
-  <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-    <h2 className="text-2xl font-black text-red-500">
-      🎯 META SEMANAL
-    </h2>
+            {!isElite && (
+              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+                <h2 className="text-2xl font-black text-red-500">
+                  🎯 META SEMANAL
+                </h2>
 
-    <p className="mt-3 text-3xl font-black text-green-400">
-      {statusMeta}
-    </p>
+                <p className="mt-3 text-3xl font-black text-green-400">
+                  {statusMeta}
+                </p>
 
-    <p className="mt-2 text-zinc-400">
-      Consulte os detalhes completos na aba Metas.
-    </p>
-  </section>
-)}
+                <p className="mt-2 text-zinc-400">
+                  Consulte os detalhes completos na aba Metas.
+                </p>
+              </section>
+            )}
 
-{isElite && (
-  <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-    <h2 className="text-2xl font-black text-red-500">
-      ⚔️ ELITE DE AÇÕES
-    </h2>
+            {isElite && (
+              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+                <h2 className="text-2xl font-black text-red-500">
+                  ⚔️ ELITE DE AÇÕES
+                </h2>
 
-    <p className="mt-3 text-zinc-300">
-      Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
-    </p>
-  </section>
-)}
+                <p className="mt-3 text-zinc-300">
+                  Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
+                </p>
+              </section>
+            )}
 
-<section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-  <h2 className="mb-4 text-2xl font-black text-red-500">
-    📢 AVISOS DA INGLATERRA
-  </h2>
+            <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+              <h2 className="mb-4 text-2xl font-black text-red-500">
+                📢 AVISOS DA INGLATERRA
+              </h2>
 
-  {avisos.length === 0 && (
-    <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>
-  )}
+              {avisos.length === 0 && (
+                <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>
+              )}
 
-  <div className="grid gap-3">
-    {avisos.map((aviso) => (
-      <div
-        key={aviso.id}
-        className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
-      >
-        <p className="text-zinc-200">{aviso.texto}</p>
-      </div>
-    ))}
-  </div>
-</section>
+              <div className="grid gap-3">
+                {avisos.map((aviso) => (
+                  <div
+                    key={aviso.id}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+                  >
+                    <p className="text-zinc-200">{aviso.texto}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
           </div>
         </section>
       </section>
