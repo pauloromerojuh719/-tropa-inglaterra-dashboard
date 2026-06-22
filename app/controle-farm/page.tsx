@@ -61,6 +61,7 @@ export default function ControleFarmPage() {
     }
 
     const discordId = (session.user as any).id;
+
     if (!discordId) {
       setCarregando(false);
       return;
@@ -80,10 +81,13 @@ export default function ControleFarmPage() {
 
     if (
       status === "aprovado" &&
-      (cargo === "Líder" ||
+      (
+        cargo === "Líder" ||
         cargo === "Vice-Líder" ||
         cargo === "Gerente Geral" ||
-        cargo === "Gerente de Produção")
+        cargo === "Gerente de Farm" ||
+        cargo === "Gerente de Produção"
+      )
     ) {
       setTemPermissao(true);
       await carregarControleFarm();
@@ -92,9 +96,7 @@ export default function ControleFarmPage() {
     }
 
     setCarregando(false);
-  }
-
-  async function carregarControleFarm() {
+  }  async function carregarControleFarm() {
     const snapshot = await getDocs(collection(db, "farm"));
 
     const mapa: Record<string, ResumoMembro> = {};
@@ -174,9 +176,7 @@ export default function ControleFarmPage() {
   }
 
   const listaFarmsMembro = farmsDoMembro();
-  const ultimoFarm = listaFarmsMembro[0];
-
-  if (carregando) {
+  const ultimoFarm = listaFarmsMembro[0];  if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
@@ -208,8 +208,9 @@ export default function ControleFarmPage() {
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-8 text-center">
           <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
+
           <p className="mt-4 text-zinc-400">
-            Apenas Líder, Vice-Líder, Gerente Geral ou Gerente de Produção podem acessar esta área.
+            Apenas Líder, Vice-Líder, Gerente Geral, Gerente de Farm ou Gerente de Produção podem acessar esta área.
           </p>
         </div>
       </main>
@@ -274,9 +275,7 @@ export default function ControleFarmPage() {
                     <div>
                       <p className="text-sm text-zinc-400">Ópios</p>
                       <p className="text-xl font-black">{membro.opios}</p>
-                    </div>
-
-                    <div>
+                    </div>                    <div>
                       <p className="text-sm text-zinc-400">Seringas</p>
                       <p className="text-xl font-black">{membro.seringas}</p>
                     </div>
@@ -322,12 +321,16 @@ export default function ControleFarmPage() {
           <div className="mt-6 grid gap-4 md:grid-cols-5">
             <div className="rounded bg-black p-4">
               <p className="text-zinc-400">🍃 Folhas</p>
-              <h3 className="text-2xl font-black">{membroSelecionado.folhas}</h3>
+              <h3 className="text-2xl font-black">
+                {membroSelecionado.folhas}
+              </h3>
             </div>
 
             <div className="rounded bg-black p-4">
               <p className="text-zinc-400">💊 Ópios</p>
-              <h3 className="text-2xl font-black">{membroSelecionado.opios}</h3>
+              <h3 className="text-2xl font-black">
+                {membroSelecionado.opios}
+              </h3>
             </div>
 
             <div className="rounded bg-black p-4">
@@ -353,21 +356,31 @@ export default function ControleFarmPage() {
           </div>
 
           <div className="mt-6 rounded bg-black p-4">
-            <p className="font-bold">🎯 Status: {statusMeta(membroSelecionado)}</p>
+            <p className="font-bold">
+              🎯 Status: {statusMeta(membroSelecionado)}
+            </p>
+
             <p className="mt-2">
               🕒 Último farm:{" "}
-              {ultimoFarm ? formatarData(ultimoFarm.criadoEm) : "Sem farm"}
+              {ultimoFarm
+                ? formatarData(ultimoFarm.criadoEm)
+                : "Sem farm"}
             </p>
+
             <p className="mt-2">
               🖼️ Prints enviados: {listaFarmsMembro.length}
             </p>
           </div>
 
-          <h3 className="mt-8 text-2xl font-bold">📸 Prints enviados</h3>
+          <h3 className="mt-8 text-2xl font-bold">
+            📸 Prints enviados
+          </h3>
 
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             {listaFarmsMembro.length === 0 ? (
-              <p className="text-zinc-400">Nenhum print encontrado.</p>
+              <p className="text-zinc-400">
+                Nenhum print encontrado.
+              </p>
             ) : (
               listaFarmsMembro.map((farm) => (
                 <div
@@ -378,6 +391,7 @@ export default function ControleFarmPage() {
                   <p>💊 Ópios: {farm.opios}</p>
                   <p>💉 Seringas: {farm.seringas}</p>
                   <p>🪡 Agulhas: {farm.agulhas}</p>
+
                   <p className="mt-2 text-zinc-400">
                     Data: {formatarData(farm.criadoEm)}
                   </p>
