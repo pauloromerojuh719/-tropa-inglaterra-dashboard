@@ -7,28 +7,31 @@ import { db } from "../lib/firebase";
 import jsPDF from "jspdf";
 
 type Membro = {
-  nome?: string;
-  nomeRP?: string;
   cargo: string;
   status: string;
 };
 
-type LinhaProducao = {
-  nome: string;
-  cargo: string;
-  folhas: number;
-  opios: number;
-  seringas: number;
-  agulhas: number;
-  total: number;
+type Producao = {
+  item: string;
+  quantidade: number;
+  responsavel: string;
+  criadoEm: any;
 };
 
-export default function ProducaoPage() {
+type Aba = "vendas" | "producao" | "compras";
+
+export default function RelatorioPage() {
   const { data: session } = useSession();
 
+  const [aba, setAba] = useState<Aba>("vendas");
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
-  const [producao, setProducao] = useState<LinhaProducao[]>([]);
+
+  const [vendasSemana, setVendasSemana] = useState(0);
+  const [acoesSemana, setAcoesSemana] = useState(0);
+  const [comprasSemana, setComprasSemana] = useState(0);
+  const [reembolsosSemana, setReembolsosSemana] = useState(0);
+  const [producoesSemana, setProducoesSemana] = useState<Producao[]>([]);
 
   function inicioDaSemana() {
     const hoje = new Date();
@@ -51,7 +54,12 @@ export default function ProducaoPage() {
     return fim;
   }
 
-  function formatarDataSimples(data: Date) {
+  function dataOk(data: any) {
+    const d = data?.toDate?.();
+    return d && d >= inicioDaSemana() && d <= fimDaSemana();
+  }
+
+  function formatarData(data: Date) {
     return data.toLocaleDateString("pt-BR");
   }
 
@@ -59,57 +67,53 @@ export default function ProducaoPage() {
     return valor.toLocaleString("pt-BR");
   }
 
-  function dataOk(data: any) {
-    const d = data?.toDate?.();
-    return d && d >= inicioDaSemana() && d <= fimDaSemana();
+  function formatarDinheiro(valor: number) {
+    return valor.toLocaleString("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    });
   }
 
-  async function carregarProducao() {
-    const membrosSnap = await getDocs(collection(db, "membros"));
-    const farmSnap = await getDocs(collection(db, "farm"));
+  async function carregarRelatorios() {
+    const vendasSnap = await getDocs(collection(db, "vendas"));
+    const acoesSnap = await getDocs(collection(db, "acoes"));
+    const comprasSnap = await getDocs(collection(db, "compras"));
+    const reembolsosSnap = await getDocs(collection(db, "reembolsos"));
+    const producoesSnap = await getDocs(collection(db, "producoes"));
 
-    const mapa: Record<string, LinhaProducao> = {};
+    setVendasSemana(
+      vendasSnap.docs.reduce((total, item) => {
+        const v = item.data() as any;
+        return dataOk(v.criadoEm) ? total + Number(v.valor || 0) : total;
+      }, 0)
+    );
 
-    membrosSnap.docs.forEach((docItem) => {
-      const m = docItem.data() as Membro;
+    setAcoesSemana(
+      acoesSnap.docs.reduce((total, item) => {
+        const a = item.data() as any;
+        return dataOk(a.criadoEm) ? total + Number(a.valor || 0) : total;
+      }, 0)
+    );
 
-      if (m.status !== "aprovado") return;
+    setComprasSemana(
+      comprasSnap.docs.reduce((total, item) => {
+        const c = item.data() as any;
+        return dataOk(c.criadoEm) ? total + Number(c.valor || 0) : total;
+      }, 0)
+    );
 
-      mapa[docItem.id] = {
-        nome: m.nomeRP || m.nome || "Sem nome",
-        cargo: m.cargo || "Sem cargo",
-        folhas: 0,
-        opios: 0,
-        seringas: 0,
-        agulhas: 0,
-        total: 0,
-      };
-    });
+    setReembolsosSemana(
+      reembolsosSnap.docs.reduce((total, item) => {
+        const r = item.data() as any;
+        return dataOk(r.criadoEm) ? total + Number(r.valor || 0) : total;
+      }, 0)
+    );
 
-    farmSnap.docs.forEach((docItem) => {
-      const f = docItem.data() as any;
+    const listaProducoes = producoesSnap.docs
+      .map((docItem) => docItem.data() as Producao)
+      .filter((p) => dataOk(p.criadoEm));
 
-      if (f.status !== "aprovado") return;
-      if (!dataOk(f.criadoEm)) return;
-
-      const id = f.membroId;
-      if (!id || !mapa[id]) return;
-
-      mapa[id].folhas += Number(f.folhas || 0);
-      mapa[id].opios += Number(f.opios || 0);
-      mapa[id].seringas += Number(f.seringas || 0);
-      mapa[id].agulhas += Number(f.agulhas || 0);
-    });
-
-    const lista = Object.values(mapa)
-      .map((m) => ({
-        ...m,
-        total: m.folhas + m.opios + m.seringas + m.agulhas,
-      }))
-      .filter((m) => m.total > 0)
-      .sort((a, b) => b.total - a.total);
-
-    setProducao(lista);
+    setProducoesSemana(listaProducoes);
   }
 
   useEffect(() => {
@@ -128,16 +132,16 @@ export default function ProducaoPage() {
       }
 
       const membro = snap.data() as Membro;
-      const cargo = membro.cargo?.trim();
+      const cargo = membro.cargo?.trim() || "";
 
       if (
         membro.status === "aprovado" &&
         (cargo === "Líder" ||
           cargo === "Vice-Líder" ||
-          cargo === "Gerente Geral")
+          cargo.includes("Gerente"))
       ) {
         setTemPermissao(true);
-        await carregarProducao();
+        await carregarRelatorios();
       }
 
       setCarregando(false);
@@ -149,64 +153,82 @@ export default function ProducaoPage() {
   const inicioSemana = inicioDaSemana();
   const fimSemana = fimDaSemana();
 
-  const totalFolhas = producao.reduce((t, m) => t + m.folhas, 0);
-  const totalOpios = producao.reduce((t, m) => t + m.opios, 0);
-  const totalSeringas = producao.reduce((t, m) => t + m.seringas, 0);
-  const totalAgulhas = producao.reduce((t, m) => t + m.agulhas, 0);
-  const totalGeral = totalFolhas + totalOpios + totalSeringas + totalAgulhas;
+  const entradas = vendasSemana + acoesSemana;
+  const saidas = comprasSemana + reembolsosSemana;
+  const resultado = entradas - saidas;
 
-  const textoRelatorio = `
+  const totalProducao = producoesSemana.reduce(
+    (total, p) => total + Number(p.quantidade || 0),
+    0
+  );
+
+  const resumoPorItem: Record<string, number> = {};
+
+  producoesSemana.forEach((p) => {
+    const item = p.item || "Sem item";
+    resumoPorItem[item] = (resumoPorItem[item] || 0) + Number(p.quantidade || 0);
+  });
+
+  const textoVendas = `
+RELATÓRIO SEMANAL DE VENDAS - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+ENTRADAS
+Vendas: ${formatarDinheiro(vendasSemana)}
+Ações: ${formatarDinheiro(acoesSemana)}
+Total Entrada: ${formatarDinheiro(entradas)}
+
+SAÍDAS
+Compras: ${formatarDinheiro(comprasSemana)}
+Reembolsos: ${formatarDinheiro(reembolsosSemana)}
+Total Saída: ${formatarDinheiro(saidas)}
+
+RESULTADO FINAL
+${formatarDinheiro(resultado)}
+`.trim();
+
+  const textoProducao = `
 RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA
 
-Semana: ${formatarDataSimples(inicioSemana)} até ${formatarDataSimples(fimSemana)}
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
 
 PRODUÇÃO TOTAL
-Folhas: ${formatarNumero(totalFolhas)}
-Ópios: ${formatarNumero(totalOpios)}
-Seringas: ${formatarNumero(totalSeringas)}
-Agulhas: ${formatarNumero(totalAgulhas)}
-Total Geral: ${formatarNumero(totalGeral)}
+Total produzido: ${formatarNumero(totalProducao)}
+Registros: ${producoesSemana.length}
 
-MEMBROS QUE PRODUZIRAM
-${producao.length}
-
-TOP PRODUÇÃO
+PRODUÇÃO POR ITEM
 ${
-  producao.length
-    ? producao
-        .slice(0, 10)
-        .map((m, i) => `${i + 1}º ${m.nome} - ${formatarNumero(m.total)} itens`)
+  Object.keys(resumoPorItem).length
+    ? Object.entries(resumoPorItem)
+        .map(([item, total]) => `${item}: ${formatarNumero(total)}`)
         .join("\n")
-    : "Nenhum"
-}
-
-PRODUÇÃO POR MEMBRO
-${
-  producao.length
-    ? producao
-        .map(
-          (m) => `- ${m.nome}
-Folhas: ${formatarNumero(m.folhas)}
-Ópios: ${formatarNumero(m.opios)}
-Seringas: ${formatarNumero(m.seringas)}
-Agulhas: ${formatarNumero(m.agulhas)}
-Total: ${formatarNumero(m.total)}`
-        )
-        .join("\n\n")
-    : "Nenhuma produção lançada nessa semana."
+    : "Nenhuma produção registrada nessa semana."
 }
 `.trim();
 
-  function gerarPDF() {
+  const textoCompras = `
+RELATÓRIO SEMANAL DE COMPRAS - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+COMPRAS
+Compras: ${formatarDinheiro(comprasSemana)}
+Reembolsos: ${formatarDinheiro(reembolsosSemana)}
+
+TOTAL GASTO
+${formatarDinheiro(saidas)}
+`.trim();
+
+  function gerarPDF(titulo: string, texto: string, nomeArquivo: string) {
     const pdf = new jsPDF();
 
     pdf.setFontSize(18);
-    pdf.text("RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA", 10, 15);
+    pdf.text(titulo, 10, 15);
 
     pdf.setFontSize(11);
 
-    const linhas = pdf.splitTextToSize(textoRelatorio, 180);
-
+    const linhas = pdf.splitTextToSize(texto, 180);
     let y = 30;
 
     linhas.forEach((linha: string) => {
@@ -219,12 +241,7 @@ Total: ${formatarNumero(m.total)}`
       y += 7;
     });
 
-    pdf.save("relatorio-semanal-producao-inglaterra.pdf");
-  }
-
-  function copiarRelatorio() {
-    navigator.clipboard.writeText(textoRelatorio);
-    alert("Relatório copiado!");
+    pdf.save(nomeArquivo);
   }
 
   if (carregando) {
@@ -258,111 +275,153 @@ Total: ${formatarNumero(m.total)}`
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="text-5xl font-black text-red-600">
-        🏭 RELATÓRIO DE PRODUÇÃO
-      </h1>
+      <h1 className="text-5xl font-black text-red-600">📊 RELATÓRIOS</h1>
 
       <p className="mt-3 text-zinc-400">
-        Semana: {formatarDataSimples(inicioSemana)} até{" "}
-        {formatarDataSimples(fimSemana)}
+        Semana: {formatarData(inicioSemana)} até {formatarData(fimSemana)}
       </p>
 
-      <div className="mt-8 grid gap-4 md:grid-cols-5">
-        <Card titulo="🌿 Folhas" valor={formatarNumero(totalFolhas)} />
-        <Card titulo="🌿 Ópios" valor={formatarNumero(totalOpios)} />
-        <Card titulo="💉 Seringas" valor={formatarNumero(totalSeringas)} />
-        <Card titulo="💉 Agulhas" valor={formatarNumero(totalAgulhas)} />
-        <Card titulo="📦 Total Geral" valor={formatarNumero(totalGeral)} />
+      <div className="mt-8 flex flex-wrap gap-3">
+        <BotaoAba ativo={aba === "vendas"} onClick={() => setAba("vendas")}>
+          💰 Vendas
+        </BotaoAba>
+
+        <BotaoAba ativo={aba === "producao"} onClick={() => setAba("producao")}>
+          🏭 Produção
+        </BotaoAba>
+
+        <BotaoAba ativo={aba === "compras"} onClick={() => setAba("compras")}>
+          🛒 Compras
+        </BotaoAba>
       </div>
 
-      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold text-red-400">🏆 Top Produção</h2>
+      {aba === "vendas" && (
+        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <h2 className="text-3xl font-bold">💰 Relatório de Vendas</h2>
 
-        <div className="mt-4 grid gap-3">
-          {producao.length === 0 ? (
-            <p className="text-zinc-400">
-              Nenhuma produção lançada nessa semana.
-            </p>
-          ) : (
-            producao.slice(0, 10).map((membro, index) => (
-              <div
-                key={membro.nome}
-                className="rounded border border-zinc-800 bg-black p-4"
-              >
-                {index + 1}º {membro.nome} - {formatarNumero(membro.total)} itens
-              </div>
-            ))
-          )}
-        </div>
-      </section>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <Card titulo="Entradas" valor={formatarDinheiro(entradas)} />
+            <Card titulo="Saídas" valor={formatarDinheiro(saidas)} />
+            <Card titulo="Resultado" valor={formatarDinheiro(resultado)} />
+          </div>
 
-      <section className="mt-8 rounded-xl border border-zinc-800 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">📋 Produção por membro</h2>
-
-        <div className="mt-5 grid gap-4">
-          {producao.map((membro) => (
-            <div
-              key={membro.nome}
-              className="rounded-xl border border-zinc-800 bg-black p-5"
-            >
-              <h3 className="text-xl font-bold text-red-500">{membro.nome}</h3>
-              <p className="text-sm text-zinc-400">{membro.cargo}</p>
-
-              <div className="mt-3 grid gap-3 md:grid-cols-5">
-                <MiniCard titulo="Folhas" valor={formatarNumero(membro.folhas)} />
-                <MiniCard titulo="Ópios" valor={formatarNumero(membro.opios)} />
-                <MiniCard titulo="Seringas" valor={formatarNumero(membro.seringas)} />
-                <MiniCard titulo="Agulhas" valor={formatarNumero(membro.agulhas)} />
-                <MiniCard titulo="Total" valor={formatarNumero(membro.total)} />
-              </div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">📄 Relatório pronto</h2>
-
-        <textarea
-          value={textoRelatorio}
-          readOnly
-          className="mt-5 h-96 w-full rounded bg-black p-4 text-white"
-        />
-
-        <div className="mt-5 flex gap-3">
-          <button
-            onClick={copiarRelatorio}
-            className="rounded bg-red-700 px-6 py-3 font-bold"
-          >
-            📋 Copiar Relatório
-          </button>
+          <textarea
+            value={textoVendas}
+            readOnly
+            className="mt-6 h-80 w-full rounded bg-black p-4 text-white"
+          />
 
           <button
-            onClick={gerarPDF}
-            className="rounded bg-green-700 px-6 py-3 font-bold"
+            onClick={() =>
+              gerarPDF(
+                "RELATÓRIO SEMANAL DE VENDAS",
+                textoVendas,
+                "relatorio-vendas-inglaterra.pdf"
+              )
+            }
+            className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
           >
-            📄 Gerar PDF
+            📄 Gerar PDF de Vendas
           </button>
-        </div>
-      </section>
+        </section>
+      )}
+
+      {aba === "producao" && (
+        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <h2 className="text-3xl font-bold">🏭 Relatório de Produção</h2>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <Card
+              titulo="Produção da Semana"
+              valor={formatarNumero(totalProducao)}
+            />
+            <Card titulo="Registros" valor={String(producoesSemana.length)} />
+          </div>
+
+          <textarea
+            value={textoProducao}
+            readOnly
+            className="mt-6 h-80 w-full rounded bg-black p-4 text-white"
+          />
+
+          <button
+            onClick={() =>
+              gerarPDF(
+                "RELATÓRIO SEMANAL DE PRODUÇÃO",
+                textoProducao,
+                "relatorio-producao-inglaterra.pdf"
+              )
+            }
+            className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
+          >
+            📄 Gerar PDF de Produção
+          </button>
+        </section>
+      )}
+
+      {aba === "compras" && (
+        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+          <h2 className="text-3xl font-bold">🛒 Relatório de Compras</h2>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            <Card titulo="Compras" valor={formatarDinheiro(comprasSemana)} />
+            <Card
+              titulo="Reembolsos"
+              valor={formatarDinheiro(reembolsosSemana)}
+            />
+            <Card titulo="Total Gasto" valor={formatarDinheiro(saidas)} />
+          </div>
+
+          <textarea
+            value={textoCompras}
+            readOnly
+            className="mt-6 h-80 w-full rounded bg-black p-4 text-white"
+          />
+
+          <button
+            onClick={() =>
+              gerarPDF(
+                "RELATÓRIO SEMANAL DE COMPRAS",
+                textoCompras,
+                "relatorio-compras-inglaterra.pdf"
+              )
+            }
+            className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
+          >
+            📄 Gerar PDF de Compras
+          </button>
+        </section>
+      )}
     </main>
+  );
+}
+
+function BotaoAba({
+  children,
+  ativo,
+  onClick,
+}: {
+  children: React.ReactNode;
+  ativo: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded px-6 py-3 font-bold ${
+        ativo ? "bg-red-700 text-white" : "bg-zinc-900 text-zinc-400"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
 function Card({ titulo, valor }: { titulo: string; valor: string }) {
   return (
-    <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
-      <p>{titulo}</p>
-      <h2 className="text-3xl font-black text-red-500">{valor}</h2>
-    </div>
-  );
-}
-
-function MiniCard({ titulo, valor }: { titulo: string; valor: string }) {
-  return (
-    <div className="rounded border border-zinc-800 bg-zinc-950 p-3">
-      <p className="text-sm text-zinc-400">{titulo}</p>
-      <h4 className="text-xl font-bold text-white">{valor}</h4>
+    <div className="rounded-xl border border-red-900 bg-black p-6">
+      <p className="text-zinc-400">{titulo}</p>
+      <h2 className="mt-2 text-3xl font-black text-red-500">{valor}</h2>
     </div>
   );
 }

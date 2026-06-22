@@ -23,6 +23,7 @@ type Producao = {
   item: string;
   quantidade: number;
   responsavel: string;
+  print?: string;
   criadoEm: any;
 };
 
@@ -34,6 +35,7 @@ export default function ProducaoPage() {
 
   const [item, setItem] = useState("");
   const [quantidade, setQuantidade] = useState("");
+  const [print, setPrint] = useState("");
   const [producoes, setProducoes] = useState<Producao[]>([]);
 
   function formatarData(data: any) {
@@ -95,8 +97,8 @@ export default function ProducaoPage() {
   async function salvarProducao() {
     if (!session?.user) return;
 
-    if (!item || !quantidade) {
-      alert("Preencha item e quantidade.");
+    if (!item || !quantidade || !print) {
+      alert("Preencha item, quantidade e o link do print.");
       return;
     }
 
@@ -104,11 +106,13 @@ export default function ProducaoPage() {
       item,
       quantidade: Number(quantidade),
       responsavel: session.user.name || "Sem nome",
+      print,
       criadoEm: Timestamp.now(),
     });
 
     setItem("");
     setQuantidade("");
+    setPrint("");
 
     await carregarProducoes();
     alert("Produção registrada!");
@@ -180,22 +184,6 @@ export default function ProducaoPage() {
     })
     .reduce((total, producao) => total + (producao.quantidade || 0), 0);
 
-  const resumoPorItem: Record<string, number> = {};
-
-  producoesSemana.forEach((producao) => {
-    const nomeItem = producao.item || "Sem item";
-    resumoPorItem[nomeItem] =
-      (resumoPorItem[nomeItem] || 0) + Number(producao.quantidade || 0);
-  });
-
-  const resumoPorResponsavel: Record<string, number> = {};
-
-  producoesSemana.forEach((producao) => {
-    const nome = producao.responsavel || "Sem nome";
-    resumoPorResponsavel[nome] =
-      (resumoPorResponsavel[nome] || 0) + Number(producao.quantidade || 0);
-  });
-
   const textoRelatorio = `
 RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA
 
@@ -205,31 +193,13 @@ PRODUÇÃO DA SEMANA
 Total produzido: ${formatarNumero(producaoSemana)}
 Registros: ${producoesSemana.length}
 
-PRODUÇÃO POR ITEM
-${
-  Object.keys(resumoPorItem).length
-    ? Object.entries(resumoPorItem)
-        .map(([item, total]) => `${item}: ${formatarNumero(total)}`)
-        .join("\n")
-    : "Nenhuma produção registrada nessa semana."
-}
-
-PRODUÇÃO POR RESPONSÁVEL
-${
-  Object.keys(resumoPorResponsavel).length
-    ? Object.entries(resumoPorResponsavel)
-        .map(([nome, total]) => `${nome}: ${formatarNumero(total)}`)
-        .join("\n")
-    : "Nenhum responsável registrado nessa semana."
-}
-
 HISTÓRICO DA SEMANA
 ${
   producoesSemana.length
     ? producoesSemana
         .map(
           (p) =>
-            `- ${p.item} | ${formatarNumero(p.quantidade)} | ${p.responsavel} | ${formatarData(p.criadoEm)}`
+            `- ${p.item} | ${formatarNumero(p.quantidade)} | ${p.responsavel} | ${formatarData(p.criadoEm)} | Print: ${p.print || "Sem print"}`
         )
         .join("\n")
     : "Nenhuma produção registrada nessa semana."
@@ -341,7 +311,7 @@ ${
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="text-3xl font-bold">Registrar Produção</h2>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2">
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
           <input
             value={item}
             onChange={(e) => setItem(e.target.value)}
@@ -354,6 +324,13 @@ ${
             onChange={(e) => setQuantidade(e.target.value)}
             placeholder="Quantidade"
             type="number"
+            className="rounded bg-black p-4 text-white"
+          />
+
+          <input
+            value={print}
+            onChange={(e) => setPrint(e.target.value)}
+            placeholder="Link do print obrigatório"
             className="rounded bg-black p-4 text-white"
           />
         </div>
@@ -378,7 +355,7 @@ ${
                 key={producao.id}
                 className="rounded-xl border border-zinc-800 bg-black p-5"
               >
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                   <div>
                     <h3 className="text-2xl font-bold">🏭 {producao.item}</h3>
 
@@ -389,6 +366,14 @@ ${
                     <p className="text-zinc-400">
                       Data: {formatarData(producao.criadoEm)}
                     </p>
+
+                    {producao.print && (
+                      <img
+                        src={producao.print}
+                        alt="Print da produção"
+                        className="mt-3 h-40 rounded border border-zinc-700"
+                      />
+                    )}
                   </div>
 
                   <p className="text-2xl font-black text-red-500">

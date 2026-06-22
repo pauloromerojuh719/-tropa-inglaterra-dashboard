@@ -1,8 +1,14 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import { useSession, signIn } from "next-auth/react";
+import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
+
+type Membro = {
+  cargo: string;
+  status: string;
+};
 
 type Farm = {
   id: string;
@@ -30,19 +36,62 @@ type ResumoMembro = {
 };
 
 export default function ControleFarmPage() {
+  const { data: session } = useSession();
+
   const [resumo, setResumo] = useState<ResumoMembro[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [membroSelecionado, setMembroSelecionado] =
     useState<ResumoMembro | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [temPermissao, setTemPermissao] = useState(false);
 
   useEffect(() => {
-    carregarControleFarm();
-  }, []);
+    verificarPermissao();
+  }, [session]);
 
   function formatarData(data: any) {
     if (!data?.toDate) return "Sem data";
     return data.toDate().toLocaleString("pt-BR");
+  }
+
+  async function verificarPermissao() {
+    if (!session?.user) {
+      setCarregando(false);
+      return;
+    }
+
+    const discordId = (session.user as any).id;
+    if (!discordId) {
+      setCarregando(false);
+      return;
+    }
+
+    const membroSnap = await getDoc(doc(db, "membros", discordId));
+
+    if (!membroSnap.exists()) {
+      setTemPermissao(false);
+      setCarregando(false);
+      return;
+    }
+
+    const membro = membroSnap.data() as Membro;
+    const cargo = membro.cargo?.trim();
+    const status = membro.status?.trim();
+
+    if (
+      status === "aprovado" &&
+      (cargo === "Líder" ||
+        cargo === "Vice-Líder" ||
+        cargo === "Gerente Geral" ||
+        cargo === "Gerente de Produção")
+    ) {
+      setTemPermissao(true);
+      await carregarControleFarm();
+    } else {
+      setTemPermissao(false);
+    }
+
+    setCarregando(false);
   }
 
   async function carregarControleFarm() {
@@ -92,7 +141,6 @@ export default function ControleFarmPage() {
 
     setResumo(lista);
     setFarms(listaFarms);
-    setCarregando(false);
   }
 
   function statusMeta(membro: ResumoMembro) {
@@ -128,6 +176,46 @@ export default function ControleFarmPage() {
   const listaFarmsMembro = farmsDoMembro();
   const ultimoFarm = listaFarmsMembro[0];
 
+  if (carregando) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+        <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
+      </main>
+    );
+  }
+
+  if (!session) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-8 text-center">
+          <h1 className="text-4xl font-black text-red-600">
+            Controle de Farm
+          </h1>
+
+          <button
+            onClick={() => signIn("discord")}
+            className="mt-6 rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
+          >
+            Entrar com Discord
+          </button>
+        </div>
+      </main>
+    );
+  }
+
+  if (!temPermissao) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
+        <div className="rounded-xl border border-red-900 bg-zinc-950 p-8 text-center">
+          <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
+          <p className="mt-4 text-zinc-400">
+            Apenas Líder, Vice-Líder, Gerente Geral ou Gerente de Produção podem acessar esta área.
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-black p-10 text-white">
       <h1 className="text-5xl font-black text-red-600">
@@ -137,9 +225,7 @@ export default function ControleFarmPage() {
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="text-3xl font-bold">Resumo dos Membros</h2>
 
-        {carregando ? (
-          <p className="mt-4 text-zinc-400">Carregando farms...</p>
-        ) : resumo.length === 0 ? (
+        {resumo.length === 0 ? (
           <p className="mt-4 text-zinc-400">
             Nenhum farm aprovado encontrado ainda.
           </p>
