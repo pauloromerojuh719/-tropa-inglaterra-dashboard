@@ -11,6 +11,7 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
+import jsPDF from "jspdf";
 
 type Membro = {
   cargo: string;
@@ -40,6 +41,14 @@ export default function ProducaoPage() {
     return data.toDate().toLocaleString("pt-BR");
   }
 
+  function formatarDataSimples(data: Date) {
+    return data.toLocaleDateString("pt-BR");
+  }
+
+  function formatarNumero(valor: number) {
+    return valor.toLocaleString("pt-BR");
+  }
+
   function inicioDaSemana() {
     const hoje = new Date();
     const dia = hoje.getDay();
@@ -50,6 +59,15 @@ export default function ProducaoPage() {
     inicio.setHours(0, 0, 0, 0);
 
     return inicio;
+  }
+
+  function fimDaSemana() {
+    const inicio = inicioDaSemana();
+    const fim = new Date(inicio);
+    fim.setDate(inicio.getDate() + 6);
+    fim.setHours(23, 59, 59, 999);
+
+    return fim;
   }
 
   function inicioDoMes() {
@@ -123,12 +141,10 @@ export default function ProducaoPage() {
 
       if (
         status === "aprovado" &&
-        (
-          cargo === "Líder" ||
+        (cargo === "Líder" ||
           cargo === "Vice-Líder" ||
           cargo === "Gerente Geral" ||
-          cargo === "Gerente de Produção"
-        )
+          cargo === "Gerente de Produção")
       ) {
         setTemPermissao(true);
         await carregarProducoes();
@@ -147,12 +163,15 @@ export default function ProducaoPage() {
     0
   );
 
-  const producaoSemana = producoes
-    .filter((producao) => {
-      const data = producao.criadoEm?.toDate?.();
-      return data && data >= inicioDaSemana();
-    })
-    .reduce((total, producao) => total + (producao.quantidade || 0), 0);
+  const producoesSemana = producoes.filter((producao) => {
+    const data = producao.criadoEm?.toDate?.();
+    return data && data >= inicioDaSemana() && data <= fimDaSemana();
+  });
+
+  const producaoSemana = producoesSemana.reduce(
+    (total, producao) => total + (producao.quantidade || 0),
+    0
+  );
 
   const producaoMes = producoes
     .filter((producao) => {
@@ -160,6 +179,87 @@ export default function ProducaoPage() {
       return data && data >= inicioDoMes();
     })
     .reduce((total, producao) => total + (producao.quantidade || 0), 0);
+
+  const resumoPorItem: Record<string, number> = {};
+
+  producoesSemana.forEach((producao) => {
+    const nomeItem = producao.item || "Sem item";
+    resumoPorItem[nomeItem] =
+      (resumoPorItem[nomeItem] || 0) + Number(producao.quantidade || 0);
+  });
+
+  const resumoPorResponsavel: Record<string, number> = {};
+
+  producoesSemana.forEach((producao) => {
+    const nome = producao.responsavel || "Sem nome";
+    resumoPorResponsavel[nome] =
+      (resumoPorResponsavel[nome] || 0) + Number(producao.quantidade || 0);
+  });
+
+  const textoRelatorio = `
+RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA
+
+Semana: ${formatarDataSimples(inicioDaSemana())} até ${formatarDataSimples(fimDaSemana())}
+
+PRODUÇÃO DA SEMANA
+Total produzido: ${formatarNumero(producaoSemana)}
+Registros: ${producoesSemana.length}
+
+PRODUÇÃO POR ITEM
+${
+  Object.keys(resumoPorItem).length
+    ? Object.entries(resumoPorItem)
+        .map(([item, total]) => `${item}: ${formatarNumero(total)}`)
+        .join("\n")
+    : "Nenhuma produção registrada nessa semana."
+}
+
+PRODUÇÃO POR RESPONSÁVEL
+${
+  Object.keys(resumoPorResponsavel).length
+    ? Object.entries(resumoPorResponsavel)
+        .map(([nome, total]) => `${nome}: ${formatarNumero(total)}`)
+        .join("\n")
+    : "Nenhum responsável registrado nessa semana."
+}
+
+HISTÓRICO DA SEMANA
+${
+  producoesSemana.length
+    ? producoesSemana
+        .map(
+          (p) =>
+            `- ${p.item} | ${formatarNumero(p.quantidade)} | ${p.responsavel} | ${formatarData(p.criadoEm)}`
+        )
+        .join("\n")
+    : "Nenhuma produção registrada nessa semana."
+}
+`.trim();
+
+  function gerarPDFSemanal() {
+    const pdf = new jsPDF();
+
+    pdf.setFontSize(18);
+    pdf.text("RELATÓRIO SEMANAL DE PRODUÇÃO", 10, 15);
+
+    pdf.setFontSize(11);
+
+    const linhas = pdf.splitTextToSize(textoRelatorio, 180);
+
+    let y = 30;
+
+    linhas.forEach((linha: string) => {
+      if (y > 280) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.text(linha, 10, y);
+      y += 7;
+    });
+
+    pdf.save("relatorio-semanal-producao-inglaterra.pdf");
+  }
 
   if (carregando) {
     return (
@@ -207,21 +307,21 @@ export default function ProducaoPage() {
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
           <p className="text-zinc-400">Produção da semana</p>
           <h2 className="mt-2 text-3xl font-black text-red-500">
-            {producaoSemana}
+            {formatarNumero(producaoSemana)}
           </h2>
         </div>
 
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
           <p className="text-zinc-400">Produção do mês</p>
           <h2 className="mt-2 text-3xl font-black text-red-500">
-            {producaoMes}
+            {formatarNumero(producaoMes)}
           </h2>
         </div>
 
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
           <p className="text-zinc-400">Total produzido</p>
           <h2 className="mt-2 text-3xl font-black">
-            {totalProduzido}
+            {formatarNumero(totalProduzido)}
           </h2>
         </div>
 
@@ -230,6 +330,13 @@ export default function ProducaoPage() {
           <h2 className="mt-2 text-3xl font-black">{producoes.length}</h2>
         </div>
       </div>
+
+      <button
+        onClick={gerarPDFSemanal}
+        className="mt-6 rounded bg-green-700 px-6 py-3 font-bold hover:bg-green-600"
+      >
+        📄 Gerar Relatório Semanal PDF
+      </button>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="text-3xl font-bold">Registrar Produção</h2>
@@ -273,9 +380,7 @@ export default function ProducaoPage() {
               >
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <h3 className="text-2xl font-bold">
-                      🏭 {producao.item}
-                    </h3>
+                    <h3 className="text-2xl font-bold">🏭 {producao.item}</h3>
 
                     <p className="mt-2 text-zinc-400">
                       Responsável: {producao.responsavel}
@@ -287,7 +392,7 @@ export default function ProducaoPage() {
                   </div>
 
                   <p className="text-2xl font-black text-red-500">
-                    {producao.quantidade}
+                    {formatarNumero(producao.quantidade)}
                   </p>
                 </div>
               </div>

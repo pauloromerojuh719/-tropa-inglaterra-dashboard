@@ -9,32 +9,26 @@ import jsPDF from "jspdf";
 type Membro = {
   nome?: string;
   nomeRP?: string;
-  email?: string;
   cargo: string;
   status: string;
 };
 
-type LinhaMeta = {
+type LinhaProducao = {
   nome: string;
   cargo: string;
   folhas: number;
   opios: number;
   seringas: number;
   agulhas: number;
-  bateu: boolean;
+  total: number;
 };
 
-export default function RelatorioPage() {
+export default function ProducaoPage() {
   const { data: session } = useSession();
 
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
-
-  const [metas, setMetas] = useState<LinhaMeta[]>([]);
-  const [vendasSemana, setVendasSemana] = useState(0);
-  const [acoesSemana, setAcoesSemana] = useState(0);
-  const [comprasSemana, setComprasSemana] = useState(0);
-  const [reembolsosSemana, setReembolsosSemana] = useState(0);
+  const [producao, setProducao] = useState<LinhaProducao[]>([]);
 
   function inicioDaSemana() {
     const hoje = new Date();
@@ -50,7 +44,6 @@ export default function RelatorioPage() {
 
   function fimDaSemana() {
     const inicio = inicioDaSemana();
-
     const fim = new Date(inicio);
     fim.setDate(inicio.getDate() + 6);
     fim.setHours(23, 59, 59, 999);
@@ -62,11 +55,8 @@ export default function RelatorioPage() {
     return data.toLocaleDateString("pt-BR");
   }
 
-  function formatarDinheiro(valor: number) {
-    return valor.toLocaleString("pt-BR", {
-      style: "currency",
-      currency: "BRL",
-    });
+  function formatarNumero(valor: number) {
+    return valor.toLocaleString("pt-BR");
   }
 
   function dataOk(data: any) {
@@ -74,39 +64,25 @@ export default function RelatorioPage() {
     return d && d >= inicioDaSemana() && d <= fimDaSemana();
   }
 
-  async function carregarRelatorio() {
+  async function carregarProducao() {
     const membrosSnap = await getDocs(collection(db, "membros"));
     const farmSnap = await getDocs(collection(db, "farm"));
-    const vendasSnap = await getDocs(collection(db, "vendas"));
-    const acoesSnap = await getDocs(collection(db, "acoes"));
-    const comprasSnap = await getDocs(collection(db, "compras"));
-    const reembolsosSnap = await getDocs(collection(db, "reembolsos"));
 
-    const mapa: Record<string, LinhaMeta> = {};
+    const mapa: Record<string, LinhaProducao> = {};
 
     membrosSnap.docs.forEach((docItem) => {
       const m = docItem.data() as Membro;
 
       if (m.status !== "aprovado") return;
 
-      const cargo = m.cargo?.trim();
-
-      const isentoFarm =
-        cargo === "Elite" ||
-        cargo === "Gerente de Ações" ||
-        cargo === "Líder" ||
-        cargo === "Vice-Líder";
-
-      if (isentoFarm) return;
-
       mapa[docItem.id] = {
         nome: m.nomeRP || m.nome || "Sem nome",
-        cargo: cargo || "Sem cargo",
+        cargo: m.cargo || "Sem cargo",
         folhas: 0,
         opios: 0,
         seringas: 0,
         agulhas: 0,
-        bateu: false,
+        total: 0,
       };
     });
 
@@ -125,49 +101,15 @@ export default function RelatorioPage() {
       mapa[id].agulhas += Number(f.agulhas || 0);
     });
 
-    const listaMetas = Object.values(mapa).map((m) => ({
-      ...m,
-      bateu:
-        m.folhas >= 2000 &&
-        m.opios >= 2000 &&
-        m.seringas >= 800 &&
-        m.agulhas >= 800,
-    }));
+    const lista = Object.values(mapa)
+      .map((m) => ({
+        ...m,
+        total: m.folhas + m.opios + m.seringas + m.agulhas,
+      }))
+      .filter((m) => m.total > 0)
+      .sort((a, b) => b.total - a.total);
 
-    listaMetas.sort((a, b) => {
-      if (a.bateu === b.bateu) return a.nome.localeCompare(b.nome);
-      return a.bateu ? -1 : 1;
-    });
-
-    setMetas(listaMetas);
-
-    setVendasSemana(
-      vendasSnap.docs.reduce((total, item) => {
-        const v = item.data() as any;
-        return dataOk(v.criadoEm) ? total + Number(v.valor || 0) : total;
-      }, 0)
-    );
-
-    setAcoesSemana(
-      acoesSnap.docs.reduce((total, item) => {
-        const a = item.data() as any;
-        return dataOk(a.criadoEm) ? total + Number(a.valor || 0) : total;
-      }, 0)
-    );
-
-    setComprasSemana(
-      comprasSnap.docs.reduce((total, item) => {
-        const c = item.data() as any;
-        return dataOk(c.criadoEm) ? total + Number(c.valor || 0) : total;
-      }, 0)
-    );
-
-    setReembolsosSemana(
-      reembolsosSnap.docs.reduce((total, item) => {
-        const r = item.data() as any;
-        return dataOk(r.criadoEm) ? total + Number(r.valor || 0) : total;
-      }, 0)
-    );
+    setProducao(lista);
   }
 
   useEffect(() => {
@@ -195,7 +137,7 @@ export default function RelatorioPage() {
           cargo === "Gerente Geral")
       ) {
         setTemPermissao(true);
-        await carregarRelatorio();
+        await carregarProducao();
       }
 
       setCarregando(false);
@@ -204,49 +146,62 @@ export default function RelatorioPage() {
     verificar();
   }, [session]);
 
-  const bateram = metas.filter((m) => m.bateu);
-  const naoBateram = metas.filter((m) => !m.bateu);
-
-  const entradas = vendasSemana + acoesSemana;
-  const saidas = comprasSemana + reembolsosSemana;
-  const resultado = entradas - saidas;
-
   const inicioSemana = inicioDaSemana();
   const fimSemana = fimDaSemana();
 
+  const totalFolhas = producao.reduce((t, m) => t + m.folhas, 0);
+  const totalOpios = producao.reduce((t, m) => t + m.opios, 0);
+  const totalSeringas = producao.reduce((t, m) => t + m.seringas, 0);
+  const totalAgulhas = producao.reduce((t, m) => t + m.agulhas, 0);
+  const totalGeral = totalFolhas + totalOpios + totalSeringas + totalAgulhas;
+
   const textoRelatorio = `
-RELATÓRIO SEMANAL - INGLATERRA
+RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA
 
 Semana: ${formatarDataSimples(inicioSemana)} até ${formatarDataSimples(fimSemana)}
 
-Bateram Meta: ${bateram.length}
-Não Bateram Meta: ${naoBateram.length}
+PRODUÇÃO TOTAL
+Folhas: ${formatarNumero(totalFolhas)}
+Ópios: ${formatarNumero(totalOpios)}
+Seringas: ${formatarNumero(totalSeringas)}
+Agulhas: ${formatarNumero(totalAgulhas)}
+Total Geral: ${formatarNumero(totalGeral)}
 
-ENTRADAS
-Vendas: ${formatarDinheiro(vendasSemana)}
-Ações: ${formatarDinheiro(acoesSemana)}
-Total Entrada: ${formatarDinheiro(entradas)}
+MEMBROS QUE PRODUZIRAM
+${producao.length}
 
-SAÍDAS
-Compras: ${formatarDinheiro(comprasSemana)}
-Reembolsos: ${formatarDinheiro(reembolsosSemana)}
-Total Saída: ${formatarDinheiro(saidas)}
+TOP PRODUÇÃO
+${
+  producao.length
+    ? producao
+        .slice(0, 10)
+        .map((m, i) => `${i + 1}º ${m.nome} - ${formatarNumero(m.total)} itens`)
+        .join("\n")
+    : "Nenhum"
+}
 
-RESULTADO FINAL
-${formatarDinheiro(resultado)}
-
-BATERAM META
-${bateram.length ? bateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"}
-
-NÃO BATERAM META
-${naoBateram.length ? naoBateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"}
+PRODUÇÃO POR MEMBRO
+${
+  producao.length
+    ? producao
+        .map(
+          (m) => `- ${m.nome}
+Folhas: ${formatarNumero(m.folhas)}
+Ópios: ${formatarNumero(m.opios)}
+Seringas: ${formatarNumero(m.seringas)}
+Agulhas: ${formatarNumero(m.agulhas)}
+Total: ${formatarNumero(m.total)}`
+        )
+        .join("\n\n")
+    : "Nenhuma produção lançada nessa semana."
+}
 `.trim();
 
   function gerarPDF() {
     const pdf = new jsPDF();
 
     pdf.setFontSize(18);
-    pdf.text("RELATÓRIO SEMANAL - INGLATERRA", 10, 15);
+    pdf.text("RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA", 10, 15);
 
     pdf.setFontSize(11);
 
@@ -264,7 +219,12 @@ ${naoBateram.length ? naoBateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"
       y += 7;
     });
 
-    pdf.save("relatorio-semanal-inglaterra.pdf");
+    pdf.save("relatorio-semanal-producao-inglaterra.pdf");
+  }
+
+  function copiarRelatorio() {
+    navigator.clipboard.writeText(textoRelatorio);
+    alert("Relatório copiado!");
   }
 
   if (carregando) {
@@ -299,7 +259,7 @@ ${naoBateram.length ? naoBateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"
   return (
     <main className="min-h-screen bg-black p-10 text-white">
       <h1 className="text-5xl font-black text-red-600">
-        📊 RELATÓRIO SEMANAL
+        🏭 RELATÓRIO DE PRODUÇÃO
       </h1>
 
       <p className="mt-3 text-zinc-400">
@@ -308,57 +268,60 @@ ${naoBateram.length ? naoBateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"
       </p>
 
       <div className="mt-8 grid gap-4 md:grid-cols-5">
-        <Card titulo="✅ Bateram Meta" valor={String(bateram.length)} />
-        <Card titulo="❌ Não Bateram" valor={String(naoBateram.length)} />
-        <Card titulo="💰 Entradas" valor={formatarDinheiro(entradas)} />
-        <Card titulo="💸 Saídas" valor={formatarDinheiro(saidas)} />
-        <Card titulo="📈 Resultado" valor={formatarDinheiro(resultado)} />
+        <Card titulo="🌿 Folhas" valor={formatarNumero(totalFolhas)} />
+        <Card titulo="🌿 Ópios" valor={formatarNumero(totalOpios)} />
+        <Card titulo="💉 Seringas" valor={formatarNumero(totalSeringas)} />
+        <Card titulo="💉 Agulhas" valor={formatarNumero(totalAgulhas)} />
+        <Card titulo="📦 Total Geral" valor={formatarNumero(totalGeral)} />
       </div>
 
-      <section className="mt-8 rounded-xl border border-green-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold text-green-400">
-          ✅ Lista de quem bateu
-        </h2>
+      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+        <h2 className="text-3xl font-bold text-red-400">🏆 Top Produção</h2>
 
         <div className="mt-4 grid gap-3">
-          {bateram.length === 0 ? (
-            <p className="text-zinc-400">Nenhum membro bateu meta ainda.</p>
+          {producao.length === 0 ? (
+            <p className="text-zinc-400">
+              Nenhuma produção lançada nessa semana.
+            </p>
           ) : (
-            bateram.map((membro) => (
+            producao.slice(0, 10).map((membro, index) => (
               <div
                 key={membro.nome}
                 className="rounded border border-zinc-800 bg-black p-4"
               >
-                ✅ {membro.nome}
+                {index + 1}º {membro.nome} - {formatarNumero(membro.total)} itens
               </div>
             ))
           )}
         </div>
       </section>
 
-      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold text-red-400">
-          ❌ Lista de quem não bateu
-        </h2>
+      <section className="mt-8 rounded-xl border border-zinc-800 bg-zinc-950 p-6">
+        <h2 className="text-3xl font-bold">📋 Produção por membro</h2>
 
-        <div className="mt-4 grid gap-3">
-          {naoBateram.length === 0 ? (
-            <p className="text-zinc-400">Todos bateram a meta.</p>
-          ) : (
-            naoBateram.map((membro) => (
-              <div
-                key={membro.nome}
-                className="rounded border border-zinc-800 bg-black p-4"
-              >
-                ❌ {membro.nome}
+        <div className="mt-5 grid gap-4">
+          {producao.map((membro) => (
+            <div
+              key={membro.nome}
+              className="rounded-xl border border-zinc-800 bg-black p-5"
+            >
+              <h3 className="text-xl font-bold text-red-500">{membro.nome}</h3>
+              <p className="text-sm text-zinc-400">{membro.cargo}</p>
+
+              <div className="mt-3 grid gap-3 md:grid-cols-5">
+                <MiniCard titulo="Folhas" valor={formatarNumero(membro.folhas)} />
+                <MiniCard titulo="Ópios" valor={formatarNumero(membro.opios)} />
+                <MiniCard titulo="Seringas" valor={formatarNumero(membro.seringas)} />
+                <MiniCard titulo="Agulhas" valor={formatarNumero(membro.agulhas)} />
+                <MiniCard titulo="Total" valor={formatarNumero(membro.total)} />
               </div>
-            ))
-          )}
+            </div>
+          ))}
         </div>
       </section>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">📋 Relatório pronto</h2>
+        <h2 className="text-3xl font-bold">📄 Relatório pronto</h2>
 
         <textarea
           value={textoRelatorio}
@@ -366,12 +329,21 @@ ${naoBateram.length ? naoBateram.map((m) => `- ${m.nome}`).join("\n") : "Nenhum"
           className="mt-5 h-96 w-full rounded bg-black p-4 text-white"
         />
 
-        <button
-          onClick={gerarPDF}
-          className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
-        >
-          📄 Gerar PDF
-        </button>
+        <div className="mt-5 flex gap-3">
+          <button
+            onClick={copiarRelatorio}
+            className="rounded bg-red-700 px-6 py-3 font-bold"
+          >
+            📋 Copiar Relatório
+          </button>
+
+          <button
+            onClick={gerarPDF}
+            className="rounded bg-green-700 px-6 py-3 font-bold"
+          >
+            📄 Gerar PDF
+          </button>
+        </div>
       </section>
     </main>
   );
@@ -382,6 +354,15 @@ function Card({ titulo, valor }: { titulo: string; valor: string }) {
     <div className="rounded-xl border border-red-900 bg-zinc-950 p-6">
       <p>{titulo}</p>
       <h2 className="text-3xl font-black text-red-500">{valor}</h2>
+    </div>
+  );
+}
+
+function MiniCard({ titulo, valor }: { titulo: string; valor: string }) {
+  return (
+    <div className="rounded border border-zinc-800 bg-zinc-950 p-3">
+      <p className="text-sm text-zinc-400">{titulo}</p>
+      <h4 className="text-xl font-bold text-white">{valor}</h4>
     </div>
   );
 }
