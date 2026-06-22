@@ -43,6 +43,10 @@ type Farm = {
   status: string;
 };
 
+type Reembolso = {
+  status: string;
+};
+
 type Plantao = {
   id: string;
   nome: string;
@@ -70,56 +74,83 @@ export default function Home() {
   const [plantaoAberto, setPlantaoAberto] = useState<Plantao | null>(null);
   const [totalMinutosPlantao, setTotalMinutosPlantao] = useState(0);
 
+  const [cadastrosPendentes, setCadastrosPendentes] = useState(0);
+  const [farmsPendentes, setFarmsPendentes] = useState(0);
+  const [reembolsosPendentes, setReembolsosPendentes] = useState(0);
+
   const cargoLimpo = membro?.cargo?.trim();
 
   const isElite =
     cargoLimpo === "Elite" ||
     cargoLimpo === "Gerente de Ações";
 
- const podeVerAdmin =
-  cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente Geral" ||
-  cargoLimpo === "Gerente de Farm" ||
-  cargoLimpo === "Gerente de Compras" ||
-  cargoLimpo === "Gerente de Vendas" ||
-  cargoLimpo === "Gerente de Produção" ||
-  cargoLimpo === "Gerente de Ações";
+  const podeVerAdmin =
+    cargoLimpo === "Líder" ||
+    cargoLimpo === "Vice-Líder" ||
+    cargoLimpo === "Gerente Geral" ||
+    cargoLimpo === "Gerente de Farm" ||
+    cargoLimpo === "Gerente de Compras" ||
+    cargoLimpo === "Gerente de Vendas" ||
+    cargoLimpo === "Gerente de Produção" ||
+    cargoLimpo === "Gerente de Ações";
 
- const progressoFolhas = Math.min(folhasMeta, 2000);
-const progressoOpios = Math.min(opiosMeta, 2000);
-const progressoSeringas = Math.min(seringasMeta, 800);
-const progressoAgulhas = Math.min(agulhasMeta, 800);
+  const progressoFolhas = Math.min(folhasMeta, 2000);
+  const progressoOpios = Math.min(opiosMeta, 2000);
+  const progressoSeringas = Math.min(seringasMeta, 800);
+  const progressoAgulhas = Math.min(agulhasMeta, 800);
 
-const totalFarm =
-  progressoFolhas +
-  progressoOpios +
-  progressoSeringas +
-  progressoAgulhas;
+  const totalFarm =
+    progressoFolhas +
+    progressoOpios +
+    progressoSeringas +
+    progressoAgulhas;
 
-const totalMeta = 2000 + 2000 + 800 + 800;
+  const totalMeta = 2000 + 2000 + 800 + 800;
 
-const porcentagemMeta = isElite
-  ? 100
-  : Math.min(100, Math.floor((totalFarm / totalMeta) * 100));
+  const porcentagemMeta = isElite
+    ? 100
+    : Math.min(100, Math.floor((totalFarm / totalMeta) * 100));
 
-const metaCompleta =
-  folhasMeta >= 2000 &&
-  opiosMeta >= 2000 &&
-  seringasMeta >= 800 &&
-  agulhasMeta >= 800;
+  const metaCompleta =
+    folhasMeta >= 2000 &&
+    opiosMeta >= 2000 &&
+    seringasMeta >= 800 &&
+    agulhasMeta >= 800;
 
-const statusMeta =
-  isElite
-    ? "ISENTO"
-    : metaCompleta
-    ? "META BATIDA"
-    : "EM ANDAMENTO";
+  const statusMeta =
+    isElite
+      ? "ISENTO"
+      : metaCompleta
+      ? "META BATIDA"
+      : "EM ANDAMENTO";
 
   function formatarMinutos(minutos: number) {
     const horas = Math.floor(minutos / 60);
     const mins = minutos % 60;
     return `${horas}h ${mins}m`;
+  }  async function buscarPendenciasGerencia() {
+    const membrosSnap = await getDocs(collection(db, "membros"));
+    const farmSnap = await getDocs(collection(db, "farm"));
+    const reembolsoSnap = await getDocs(collection(db, "reembolsos"));
+
+    const totalCadastros = membrosSnap.docs.filter((item) => {
+      const membro = item.data() as Membro;
+      return membro.status === "pendente";
+    }).length;
+
+    const totalFarms = farmSnap.docs.filter((item) => {
+      const farm = item.data() as Farm;
+      return farm.status === "pendente";
+    }).length;
+
+    const totalReembolsos = reembolsoSnap.docs.filter((item) => {
+      const reembolso = item.data() as Reembolso;
+      return reembolso.status === "pendente";
+    }).length;
+
+    setCadastrosPendentes(totalCadastros);
+    setFarmsPendentes(totalFarms);
+    setReembolsosPendentes(totalReembolsos);
   }
 
   async function buscarPlantoes() {
@@ -176,7 +207,10 @@ const statusMeta =
     const inicioMillis = plantaoAberto.inicio.toDate().getTime();
     const fimMillis = agora.toDate().getTime();
 
-    const minutos = Math.max(1, Math.floor((fimMillis - inicioMillis) / 60000));
+    const minutos = Math.max(
+      1,
+      Math.floor((fimMillis - inicioMillis) / 60000)
+    );
 
     await updateDoc(doc(db, "plantoes", plantaoAberto.id), {
       fim: agora,
@@ -185,7 +219,9 @@ const statusMeta =
     });
 
     await buscarPlantoes();
-  }  useEffect(() => {
+  }
+
+  useEffect(() => {
     async function buscarMembro() {
       if (!session?.user) return;
 
@@ -212,9 +248,7 @@ const statusMeta =
       } else {
         setMembro(membroSnap.data() as Membro);
       }
-    }
-
-    async function buscarAvisos() {
+    }    async function buscarAvisos() {
       const snapshot = await getDocs(collection(db, "avisos"));
 
       const lista = snapshot.docs.map((item) => ({
@@ -261,6 +295,7 @@ const statusMeta =
     buscarAvisos();
     buscarMinhaMeta();
     buscarPlantoes();
+    buscarPendenciasGerencia();
   }, [session]);
 
   async function solicitarEntrada() {
@@ -467,79 +502,52 @@ const statusMeta =
                 📦 FARM
               </Link>
 
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente Geral" ||
-                cargoLimpo === "Gerente de Farm") && (
-                <Link href="/controle-farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  🌿 CONTROLE FARM
-                </Link>
-              )}
+              {podeVerAdmin && (
+                <>
+                  <Link href="/controle-farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🌿 CONTROLE FARM
+                  </Link>
 
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente Geral" ||
-                cargoLimpo === "Gerente de Compras") && (
-                <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  🛒 COMPRAS
-                </Link>
-              )}
+                  <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🛒 COMPRAS
+                  </Link>
 
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente Geral" ||
-                cargoLimpo === "Gerente de Vendas") && (
-                <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  💰 VENDAS
-                </Link>
-              )}
+                  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    💰 VENDAS
+                  </Link>
 
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente Geral" ||
-                cargoLimpo === "Gerente de Produção") && (
-                <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  🏭 PRODUÇÃO
-                </Link>
-              )}
+                  <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🏭 PRODUÇÃO
+                  </Link>
 
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente Geral" ||
-                cargoLimpo === "Gerente de Produção") && (
-                <Link href="/reembolso" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  💸 REEMBOLSO
-                </Link>
+                  <Link href="/reembolso" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    💸 REEMBOLSO
+                  </Link>
+                </>
               )}
 
               <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 🏆 RANKING
               </Link>
-                            <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+
+              <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 👥 MEMBROS
               </Link>
 
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente Geral" ||
-                cargoLimpo === "Gerente de Ações") && (
-                <Link href="/acoes" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  🎯 AÇÕES
-                </Link>
-              )}
-
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente Geral") && (
-                <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  📊 RELATÓRIO
-                </Link>
-              )}
-
               {podeVerAdmin && (
-                <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                  ⚙️ ADMIN
-                </Link>
+                <>
+                  <Link href="/acoes" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🎯 AÇÕES
+                  </Link>
+
+                  <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    📊 RELATÓRIO
+                  </Link>
+
+                  <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    ⚙️ ADMIN
+                  </Link>
+                </>
               )}
             </nav>
 
@@ -619,6 +627,40 @@ const statusMeta =
                 />
               )}
             </div>
+
+            {podeVerAdmin && (
+              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
+                <h2 className="mb-4 text-2xl font-black text-red-500">
+                  ⚠️ PENDÊNCIAS DA GERÊNCIA
+                </h2>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Link href="/admin">
+                    <Card
+                      titulo="CADASTROS PENDENTES"
+                      valor={String(cadastrosPendentes)}
+                      desc="AGUARDANDO APROVAÇÃO"
+                    />
+                  </Link>
+
+                  <Link href="/admin">
+                    <Card
+                      titulo="FARMS PENDENTES"
+                      valor={String(farmsPendentes)}
+                      desc="AGUARDANDO APROVAÇÃO"
+                    />
+                  </Link>
+
+                  <Link href="/reembolso">
+                    <Card
+                      titulo="REEMBOLSOS PENDENTES"
+                      valor={String(reembolsosPendentes)}
+                      desc="AGUARDANDO PAGAMENTO"
+                    />
+                  </Link>
+                </div>
+              </section>
+            )}
 
             {!isElite && (
               <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
