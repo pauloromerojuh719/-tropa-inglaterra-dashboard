@@ -79,10 +79,15 @@ export default function Home() {
   const podeVerAdmin =
     cargoLimpo === "Gerente" ||
     cargoLimpo === "Vice-Líder" ||
-    cargoLimpo === "Líder";
+    cargoLimpo === "Líder" ||
+    cargoLimpo === "Gerente Geral";
 
   const totalFarm = folhasMeta + opiosMeta + seringasMeta + agulhasMeta;
   const totalMeta = 2000 + 2000 + 800 + 800;
+
+  const porcentagemMeta = isElite
+    ? 100
+    : Math.min(100, Math.floor((totalFarm / totalMeta) * 100));
 
   const statusMeta =
     isElite ? "ISENTO" : totalFarm >= totalMeta ? "META BATIDA" : "EM ANDAMENTO";
@@ -295,7 +300,9 @@ export default function Home() {
         <h1 className="text-4xl">Carregando...</h1>
       </main>
     );
-  }  if (membro.status === "cadastro") {
+  }
+
+  if (membro.status === "cadastro") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="w-full max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8">
@@ -352,9 +359,7 @@ export default function Home() {
         </div>
       </main>
     );
-  }
-
-  if (membro.status === "pendente") {
+  }  if (membro.status === "pendente") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8 text-center">
@@ -445,7 +450,9 @@ export default function Home() {
                 <Link href="/controle-farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                   🌿 CONTROLE FARM
                 </Link>
-              )}              {(cargoLimpo === "Líder" ||
+              )}
+
+              {(cargoLimpo === "Líder" ||
                 cargoLimpo === "Vice-Líder" ||
                 cargoLimpo === "Gerente Geral" ||
                 cargoLimpo === "Gerente de Compras") && (
@@ -484,8 +491,7 @@ export default function Home() {
               <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 🏆 RANKING
               </Link>
-
-              <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                            <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                 👥 MEMBROS
               </Link>
 
@@ -584,8 +590,8 @@ export default function Home() {
               {!isElite && (
                 <Card
                   titulo="STATUS DA META"
-                  valor={statusMeta}
-                  desc="SEMANA ATUAL"
+                  valor={`${porcentagemMeta}%`}
+                  desc={statusMeta}
                 />
               )}
             </div>
@@ -596,12 +602,19 @@ export default function Home() {
                   🎯 META SEMANAL
                 </h2>
 
-                <p className="mt-3 text-3xl font-black text-green-400">
-                  {statusMeta}
+                <p className="mt-4 text-center text-6xl font-black text-green-400">
+                  {porcentagemMeta}%
                 </p>
 
-                <p className="mt-2 text-zinc-400">
-                  Consulte os detalhes completos na aba Metas.
+                <div className="mt-5 h-5 w-full overflow-hidden rounded-full bg-zinc-800">
+                  <div
+                    className="h-5 bg-green-500 transition-all"
+                    style={{ width: `${porcentagemMeta}%` }}
+                  />
+                </div>
+
+                <p className="mt-4 text-center text-xl font-bold text-zinc-300">
+                  {statusMeta}
                 </p>
               </section>
             )}
