@@ -49,6 +49,21 @@ export default function AdminPage() {
   const [metaSeringas, setMetaSeringas] = useState("800");
   const [metaAgulhas, setMetaAgulhas] = useState("800");
 
+  function ehGerencia(cargo?: string) {
+    const cargoLimpo = cargo?.trim();
+
+    return (
+      cargoLimpo === "Líder" ||
+      cargoLimpo === "Vice-Líder" ||
+      cargoLimpo === "Gerente Geral" ||
+      cargoLimpo === "Gerente de Farm" ||
+      cargoLimpo === "Gerente de Compras" ||
+      cargoLimpo === "Gerente de Vendas" ||
+      cargoLimpo === "Gerente de Produção" ||
+      cargoLimpo === "Gerente de Ações"
+    );
+  }
+
   useEffect(() => {
     async function verificarPermissao() {
       if (!session?.user) {
@@ -57,6 +72,7 @@ export default function AdminPage() {
       }
 
       const discordId = (session.user as any).id;
+
       if (!discordId) {
         setCarregando(false);
         return;
@@ -74,29 +90,21 @@ export default function AdminPage() {
       const cargo = membro.cargo?.trim();
       const status = membro.status?.trim();
 
-   if (
-  status === "aprovado" &&
-  (
-    cargo === "Gerente Geral" ||
-    cargo === "Vice-Líder" ||
-    cargo === "Líder"
-  )
-) {
-  setTemPermissao(true);
-  await carregarFarms();
-  await carregarMembros();
-  await carregarMetas();
-} else {
-  setTemPermissao(false);
-}
+      if (status === "aprovado" && ehGerencia(cargo)) {
+        setTemPermissao(true);
+        await carregarFarms();
+        await carregarMembros();
+        await carregarMetas();
+      } else {
+        setTemPermissao(false);
+      }
 
       setCarregando(false);
     }
 
     verificarPermissao();
   }, [session]);
-
-  async function carregarMetas() {
+    async function carregarMetas() {
     const metasSnap = await getDoc(doc(db, "config", "metas"));
 
     if (metasSnap.exists()) {
@@ -205,9 +213,7 @@ export default function AdminPage() {
 
     alert("Farm reprovado!");
     carregarFarms();
-  }
-
-  if (carregando) {
+  }  if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
@@ -239,8 +245,9 @@ export default function AdminPage() {
           <h1 className="text-5xl font-black text-red-600">
             ❌ ACESSO NEGADO
           </h1>
+
           <p className="mt-4 text-zinc-400">
-            Apenas Gerente, Vice-Líder ou Líder podem acessar o painel admin.
+            Apenas Líder, Vice-Líder ou Gerentes podem acessar o painel admin.
           </p>
         </div>
       </main>
@@ -311,8 +318,7 @@ export default function AdminPage() {
           Publicar Aviso
         </button>
       </section>
-
-      <section className="mb-10 rounded-xl border border-red-900 bg-zinc-950 p-6">
+            <section className="mb-10 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="mb-5 text-3xl font-bold">👥 Membros Pendentes</h2>
 
         {membros.length === 0 && (
@@ -346,15 +352,17 @@ export default function AdminPage() {
                 onChange={(e) => mudarCargo(membro.id, e.target.value)}
                 className="mt-4 w-full rounded bg-zinc-900 p-3 text-white"
               >
-<option value="Membro">👥 Membro</option>
-<option value="Gerente de Farm">🌿 Gerente de Farm</option>
-<option value="Gerente de Vendas">💰 Gerente de Vendas</option>
-<option value="Gerente de Produção">🏭 Gerente de Produção</option>
-<option value="Gerente de Compras">🛒 Gerente de Compras</option>
-<option value="Gerente Geral">🛡️ Gerente Geral</option>
-<option value="Vice-Líder">👑 Vice-Líder</option>
-<option value="Líder">🏆 Líder</option>
-</select>
+                <option value="Membro">👥 Membro</option>
+                <option value="Elite">⚔️ Elite</option>
+                <option value="Gerente de Farm">🌿 Gerente de Farm</option>
+                <option value="Gerente de Vendas">💰 Gerente de Vendas</option>
+                <option value="Gerente de Produção">🏭 Gerente de Produção</option>
+                <option value="Gerente de Compras">🛒 Gerente de Compras</option>
+                <option value="Gerente de Ações">🎯 Gerente de Ações</option>
+                <option value="Gerente Geral">🛡️ Gerente Geral</option>
+                <option value="Vice-Líder">👑 Vice-Líder</option>
+                <option value="Líder">🏆 Líder</option>
+              </select>
 
               <div className="mt-5 flex gap-3">
                 <button

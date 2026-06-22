@@ -76,11 +76,15 @@ export default function Home() {
     cargoLimpo === "Elite" ||
     cargoLimpo === "Gerente de Ações";
 
-  const podeVerAdmin =
-    cargoLimpo === "Gerente" ||
-    cargoLimpo === "Vice-Líder" ||
-    cargoLimpo === "Líder" ||
-    cargoLimpo === "Gerente Geral";
+ const podeVerAdmin =
+  cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente Geral" ||
+  cargoLimpo === "Gerente de Farm" ||
+  cargoLimpo === "Gerente de Compras" ||
+  cargoLimpo === "Gerente de Vendas" ||
+  cargoLimpo === "Gerente de Produção" ||
+  cargoLimpo === "Gerente de Ações";
 
  const progressoFolhas = Math.min(folhasMeta, 2000);
 const progressoOpios = Math.min(opiosMeta, 2000);
