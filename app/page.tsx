@@ -82,15 +82,35 @@ export default function Home() {
     cargoLimpo === "Líder" ||
     cargoLimpo === "Gerente Geral";
 
-  const totalFarm = folhasMeta + opiosMeta + seringasMeta + agulhasMeta;
-  const totalMeta = 2000 + 2000 + 800 + 800;
+ const progressoFolhas = Math.min(folhasMeta, 2000);
+const progressoOpios = Math.min(opiosMeta, 2000);
+const progressoSeringas = Math.min(seringasMeta, 800);
+const progressoAgulhas = Math.min(agulhasMeta, 800);
 
-  const porcentagemMeta = isElite
-    ? 100
-    : Math.min(100, Math.floor((totalFarm / totalMeta) * 100));
+const totalFarm =
+  progressoFolhas +
+  progressoOpios +
+  progressoSeringas +
+  progressoAgulhas;
 
-  const statusMeta =
-    isElite ? "ISENTO" : totalFarm >= totalMeta ? "META BATIDA" : "EM ANDAMENTO";
+const totalMeta = 2000 + 2000 + 800 + 800;
+
+const porcentagemMeta = isElite
+  ? 100
+  : Math.min(100, Math.floor((totalFarm / totalMeta) * 100));
+
+const metaCompleta =
+  folhasMeta >= 2000 &&
+  opiosMeta >= 2000 &&
+  seringasMeta >= 800 &&
+  agulhasMeta >= 800;
+
+const statusMeta =
+  isElite
+    ? "ISENTO"
+    : metaCompleta
+    ? "META BATIDA"
+    : "EM ANDAMENTO";
 
   function formatarMinutos(minutos: number) {
     const horas = Math.floor(minutos / 60);
