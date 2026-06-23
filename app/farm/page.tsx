@@ -18,8 +18,41 @@ export default function FarmPage() {
   function converterPrint(arquivo: File) {
     const reader = new FileReader();
 
-    reader.onloadend = () => {
-      setPrint(reader.result as string);
+    reader.onload = (evento) => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+
+        const MAX_WIDTH = 900;
+        const scale = Math.min(1, MAX_WIDTH / img.width);
+
+        canvas.width = img.width * scale;
+        canvas.height = img.height * scale;
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          alert("Erro ao carregar imagem.");
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const imagemComprimida = canvas.toDataURL("image/jpeg", 0.45);
+
+        setPrint(imagemComprimida);
+      };
+
+      img.onerror = () => {
+        alert("Erro ao converter imagem.");
+      };
+
+      img.src = evento.target?.result as string;
+    };
+
+    reader.onerror = () => {
+      alert("Erro ao carregar o print.");
     };
 
     reader.readAsDataURL(arquivo);
@@ -72,9 +105,7 @@ export default function FarmPage() {
 
       alert(
         "ERRO REAL:\n\n" +
-          (error?.message ||
-            error?.code ||
-            JSON.stringify(error))
+          (error?.message || error?.code || JSON.stringify(error))
       );
     } finally {
       setEnviando(false);
@@ -104,14 +135,10 @@ export default function FarmPage() {
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="text-5xl font-black text-red-600">
-        📦 FARM
-      </h1>
+      <h1 className="text-5xl font-black text-red-600">📦 FARM</h1>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">
-          Enviar Farm
-        </h2>
+        <h2 className="text-3xl font-bold">Enviar Farm</h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <input
