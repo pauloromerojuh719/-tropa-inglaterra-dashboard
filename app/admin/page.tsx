@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import {
-  addDoc,
+  
   collection,
   doc,
   getDoc,
@@ -155,19 +155,22 @@ export default function AdminPage() {
   }
 
   async function criarAviso() {
-    if (!novoAviso.trim()) {
-      alert("Digite um aviso.");
-      return;
-    }
-
-    await addDoc(collection(db, "avisos"), {
-      texto: novoAviso,
-      criadoEm: new Date(),
-    });
-
-    alert("Aviso publicado!");
-    setNovoAviso("");
+  if (!novoAviso.trim()) {
+    alert("Digite um aviso.");
+    return;
   }
+
+  await setDoc(
+    doc(db, "avisos", "principal"),
+    {
+      texto: novoAviso,
+      atualizadoEm: new Date(),
+    },
+    { merge: true }
+  );
+
+  alert("Aviso principal atualizado!");
+}
 
   async function aprovarMembro(id: string, cargo: string) {
     await updateDoc(doc(db, "membros", id), {
