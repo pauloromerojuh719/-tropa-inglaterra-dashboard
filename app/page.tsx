@@ -217,7 +217,6 @@ export default function Home() {
       minutos,
       status: "fechado",
     });
-
     await buscarPlantoes();
   }
 
@@ -248,15 +247,23 @@ export default function Home() {
       } else {
         setMembro(membroSnap.data() as Membro);
       }
-    }    async function buscarAvisos() {
-      const snapshot = await getDocs(collection(db, "avisos"));
+    }
 
-      const lista = snapshot.docs.map((item) => ({
-        id: item.id,
-        ...(item.data() as Omit<Aviso, "id">),
-      }));
+    async function buscarAvisos() {
+      const avisoSnap = await getDoc(doc(db, "avisos", "principal"));
 
-      setAvisos(lista.reverse());
+      if (avisoSnap.exists()) {
+        const dados = avisoSnap.data() as Omit<Aviso, "id">;
+
+        setAvisos([
+          {
+            id: "principal",
+            texto: dados.texto,
+          },
+        ]);
+      } else {
+        setAvisos([]);
+      }
     }
 
     async function buscarMinhaMeta() {
@@ -541,19 +548,13 @@ export default function Home() {
                   </Link>
 
                   <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  📊 RELATÓRIO
-</Link>
+                    📊 RELATÓRIO
+                  </Link>
+                  
 
-<Link
-  href="/advertencias"
-  className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
->
-  ⚠️ ADVERTÊNCIAS
-</Link>
-
-<Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  ⚙️ ADMIN
-</Link>
+                  <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    ⚙️ ADMIN
+                  </Link>
                 </>
               )}
             </nav>
