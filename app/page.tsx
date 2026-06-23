@@ -541,12 +541,19 @@ export default function Home() {
                   </Link>
 
                   <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    📊 RELATÓRIO
-                  </Link>
+  📊 RELATÓRIO
+</Link>
 
-                  <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    ⚙️ ADMIN
-                  </Link>
+<Link
+  href="/advertencias"
+  className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900"
+>
+  ⚠️ ADVERTÊNCIAS
+</Link>
+
+<Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+  ⚙️ ADMIN
+</Link>
                 </>
               )}
             </nav>

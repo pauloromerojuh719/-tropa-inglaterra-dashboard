@@ -2,11 +2,21 @@
 
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
-import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  Timestamp,
+} from "firebase/firestore";
 import { db } from "../lib/firebase";
 import jsPDF from "jspdf";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  email?: string;
   cargo: string;
   status: string;
 };
@@ -18,6 +28,17 @@ type Producao = {
   criadoEm: any;
 };
 
+type Farm = {
+  membroId?: string;
+  membroNome?: string;
+  folhas: number;
+  opios: number;
+  seringas: number;
+  agulhas: number;
+  status: string;
+  criadoEm: any;
+};
+
 type Aba = "vendas" | "producao" | "compras";
 
 export default function RelatorioPage() {
@@ -26,6 +47,7 @@ export default function RelatorioPage() {
   const [aba, setAba] = useState<Aba>("vendas");
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [gerandoAdv, setGerandoAdv] = useState(false);
 
   const [vendasSemana, setVendasSemana] = useState(0);
   const [acoesSemana, setAcoesSemana] = useState(0);
@@ -33,12 +55,17 @@ export default function RelatorioPage() {
   const [reembolsosSemana, setReembolsosSemana] = useState(0);
   const [producoesSemana, setProducoesSemana] = useState<Producao[]>([]);
 
+  const META_FOLHAS = 2000;
+  const META_OPIOS = 2000;
+  const META_SERINGAS = 800;
+  const META_AGULHAS = 800;
+
   function inicioDaSemana() {
     const hoje = new Date();
     const dia = hoje.getDay();
     const diferenca = dia === 0 ? 6 : dia - 1;
-
     const inicio = new Date(hoje);
+
     inicio.setDate(hoje.getDate() - diferenca);
     inicio.setHours(0, 0, 0, 0);
 
@@ -48,6 +75,7 @@ export default function RelatorioPage() {
   function fimDaSemana() {
     const inicio = inicioDaSemana();
     const fim = new Date(inicio);
+
     fim.setDate(inicio.getDate() + 6);
     fim.setHours(23, 59, 59, 999);
 
@@ -114,6 +142,113 @@ export default function RelatorioPage() {
       .filter((p) => dataOk(p.criadoEm));
 
     setProducoesSemana(listaProducoes);
+  }
+
+  async function gerarAdvertenciasAutomaticas() {
+    const confirmar = confirm(
+      "Deseja gerar advertências automáticas para quem não bateu a meta da semana?"
+    );
+
+    if (!confirmar) return;
+
+    setGerandoAdv(true);
+
+    try {
+      const membrosSnap = await getDocs(collection(db, "membros"));
+      const farmSnap = await getDocs(collection(db, "farm"));
+      const advSnap = await getDocs(collection(db, "advertencias"));
+
+      const inicio = inicioDaSemana();
+      const fim = fimDaSemana();
+
+      const semanaInicio = inicio.toISOString();
+      const semanaFim = fim.toISOString();
+
+      let criadas = 0;
+
+      for (const membroDoc of membrosSnap.docs) {
+        const membro = membroDoc.data() as Membro;
+        const membroId = membroDoc.id;
+        const cargo = membro.cargo || "";
+
+        const isento =
+          cargo === "Elite" ||
+          cargo === "Gerente de Ações" ||
+          cargo === "Líder" ||
+          cargo === "Vice-Líder";
+
+        if (membro.status !== "aprovado" || isento) continue;
+
+        const farmsDoMembro = farmSnap.docs
+          .map((f) => f.data() as Farm)
+          .filter(
+            (f) =>
+              f.membroId === membroId &&
+              f.status === "aprovado" &&
+              dataOk(f.criadoEm)
+          );
+
+        const totalFolhas = farmsDoMembro.reduce(
+          (t, f) => t + Number(f.folhas || 0),
+          0
+        );
+        const totalOpios = farmsDoMembro.reduce(
+          (t, f) => t + Number(f.opios || 0),
+          0
+        );
+        const totalSeringas = farmsDoMembro.reduce(
+          (t, f) => t + Number(f.seringas || 0),
+          0
+        );
+        const totalAgulhas = farmsDoMembro.reduce(
+          (t, f) => t + Number(f.agulhas || 0),
+          0
+        );
+
+        const bateuMeta =
+          totalFolhas >= META_FOLHAS &&
+          totalOpios >= META_OPIOS &&
+          totalSeringas >= META_SERINGAS &&
+          totalAgulhas >= META_AGULHAS;
+
+        if (bateuMeta) continue;
+
+        const jaExiste = advSnap.docs.some((adv) => {
+          const a = adv.data() as any;
+          return (
+            a.membroId === membroId &&
+            a.semanaInicio === semanaInicio &&
+            a.tipo === "automatica"
+          );
+        });
+
+        if (jaExiste) continue;
+
+        await addDoc(collection(db, "advertencias"), {
+          membroId,
+          membroNome: membro.nomeRP || membro.nome || "Sem nome",
+          cargo,
+          motivo: "Não bateu a meta semanal",
+          tipo: "automatica",
+          semanaInicio,
+          semanaFim,
+          folhas: totalFolhas,
+          opios: totalOpios,
+          seringas: totalSeringas,
+          agulhas: totalAgulhas,
+          criadoEm: Timestamp.now(),
+        });
+
+        criadas++;
+      }
+
+      alert(`Advertências geradas: ${criadas}`);
+    } catch (error) {
+      console.log(error);
+      alert("Erro ao gerar advertências.");
+    }
+
+    setGerandoAdv(false);
   }
 
   useEffect(() => {
@@ -246,9 +381,7 @@ ${formatarDinheiro(saidas)}
 
   if (carregando) {
     return (
-      <main className="min-h-screen bg-black p-10 text-white">
-        Carregando...
-      </main>
+      <main className="min-h-screen bg-black p-10 text-white">Carregando...</main>
     );
   }
 
@@ -280,6 +413,16 @@ ${formatarDinheiro(saidas)}
       <p className="mt-3 text-zinc-400">
         Semana: {formatarData(inicioSemana)} até {formatarData(fimSemana)}
       </p>
+
+      <button
+        onClick={gerarAdvertenciasAutomaticas}
+        disabled={gerandoAdv}
+        className="mt-6 rounded bg-yellow-600 px-6 py-3 font-bold text-black disabled:opacity-50"
+      >
+        {gerandoAdv
+          ? "Gerando advertências..."
+          : "⚠️ Gerar Advertências Automáticas"}
+      </button>
 
       <div className="mt-8 flex flex-wrap gap-3">
         <BotaoAba ativo={aba === "vendas"} onClick={() => setAba("vendas")}>
@@ -331,10 +474,7 @@ ${formatarDinheiro(saidas)}
           <h2 className="text-3xl font-bold">🏭 Relatório de Produção</h2>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Card
-              titulo="Produção da Semana"
-              valor={formatarNumero(totalProducao)}
-            />
+            <Card titulo="Produção da Semana" valor={formatarNumero(totalProducao)} />
             <Card titulo="Registros" valor={String(producoesSemana.length)} />
           </div>
 
@@ -365,10 +505,7 @@ ${formatarDinheiro(saidas)}
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <Card titulo="Compras" valor={formatarDinheiro(comprasSemana)} />
-            <Card
-              titulo="Reembolsos"
-              valor={formatarDinheiro(reembolsosSemana)}
-            />
+            <Card titulo="Reembolsos" valor={formatarDinheiro(reembolsosSemana)} />
             <Card titulo="Total Gasto" valor={formatarDinheiro(saidas)} />
           </div>
 
