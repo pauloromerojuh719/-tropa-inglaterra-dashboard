@@ -67,9 +67,15 @@ export default function FarmPage() {
       setPrint("");
 
       alert("Farm enviado para aprovação!");
-    } catch (error) {
-      console.error("Erro ao enviar farm:", error);
-      alert("Erro ao enviar farm. Verifique as permissões do Firebase.");
+    } catch (error: any) {
+      console.error("ERRO COMPLETO:", error);
+
+      alert(
+        "ERRO REAL:\n\n" +
+          (error?.message ||
+            error?.code ||
+            JSON.stringify(error))
+      );
     } finally {
       setEnviando(false);
     }
@@ -98,10 +104,14 @@ export default function FarmPage() {
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="text-5xl font-black text-red-600">📦 FARM</h1>
+      <h1 className="text-5xl font-black text-red-600">
+        📦 FARM
+      </h1>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">Enviar Farm</h2>
+        <h2 className="text-3xl font-bold">
+          Enviar Farm
+        </h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
           <input
@@ -142,7 +152,10 @@ export default function FarmPage() {
             className="rounded bg-black p-4 md:col-span-2"
             onChange={(e) => {
               const arquivo = e.target.files?.[0];
-              if (arquivo) converterPrint(arquivo);
+
+              if (arquivo) {
+                converterPrint(arquivo);
+              }
             }}
           />
         </div>
