@@ -26,6 +26,15 @@ type Compra = {
   criadoEm: any;
 };
 
+type MovimentoCaixa = {
+  id: string;
+  tipo: "entrada" | "saida";
+  valor: number;
+  descricao?: string;
+  responsavel: string;
+  criadoEm: any;
+};
+
 export default function ComprasPage() {
   const { data: session } = useSession();
 
@@ -36,6 +45,9 @@ export default function ComprasPage() {
   const [quantidade, setQuantidade] = useState("");
   const [valor, setValor] = useState("");
   const [compras, setCompras] = useState<Compra[]>([]);
+
+  const [saldoAdicionar, setSaldoAdicionar] = useState("");
+  const [historicoCaixa, setHistoricoCaixa] = useState<MovimentoCaixa[]>([]);
 
   function formatarDinheiro(valor: number) {
     return valor.toLocaleString("pt-BR", {
@@ -64,9 +76,7 @@ export default function ComprasPage() {
   function inicioDoMes() {
     const hoje = new Date();
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  }
-
-  async function carregarCompras() {
+  }  async function carregarCompras() {
     const snapshot = await getDocs(collection(db, "compras"));
 
     const lista = snapshot.docs.map((doc) => ({
@@ -81,6 +91,45 @@ export default function ComprasPage() {
     });
 
     setCompras(lista);
+  }
+
+  async function carregarCaixa() {
+    const snapshot = await getDocs(collection(db, "caixa"));
+
+    const lista = snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<MovimentoCaixa, "id">),
+    })) as MovimentoCaixa[];
+
+    lista.sort((a, b) => {
+      const dataA = a.criadoEm?.toDate?.()?.getTime?.() || 0;
+      const dataB = b.criadoEm?.toDate?.()?.getTime?.() || 0;
+      return dataB - dataA;
+    });
+
+    setHistoricoCaixa(lista);
+  }
+
+  async function adicionarSaldo() {
+    if (!session?.user) return;
+
+    if (!saldoAdicionar) {
+      alert("Digite o valor para adicionar.");
+      return;
+    }
+
+    await addDoc(collection(db, "caixa"), {
+      tipo: "entrada",
+      valor: Number(saldoAdicionar),
+      descricao: "Saldo adicionado",
+      responsavel: session.user.name || "Sem nome",
+      criadoEm: Timestamp.now(),
+    });
+
+    setSaldoAdicionar("");
+    await carregarCaixa();
+
+    alert("Saldo adicionado!");
   }
 
   async function salvarCompra() {
@@ -99,15 +148,23 @@ export default function ComprasPage() {
       criadoEm: Timestamp.now(),
     });
 
+    await addDoc(collection(db, "caixa"), {
+      tipo: "saida",
+      valor: Number(valor),
+      descricao: `Compra: ${item}`,
+      responsavel: session.user.name || "Sem nome",
+      criadoEm: Timestamp.now(),
+    });
+
     setItem("");
     setQuantidade("");
     setValor("");
 
     await carregarCompras();
-    alert("Compra registrada!");
-  }
+    await carregarCaixa();
 
-  useEffect(() => {
+    alert("Compra registrada e descontada do caixa!");
+  }  useEffect(() => {
     async function verificarPermissao() {
       if (!session?.user) {
         setCarregando(false);
@@ -115,6 +172,7 @@ export default function ComprasPage() {
       }
 
       const discordId = (session.user as any).id;
+
       if (!discordId) {
         setCarregando(false);
         return;
@@ -129,20 +187,18 @@ export default function ComprasPage() {
       }
 
       const membro = membroSnap.data() as Membro;
-      const cargo = membro.cargo?.trim();
-      const status = membro.status?.trim();
+      const cargo = membro.cargo?.trim() || "";
+      const status = membro.status?.trim() || "";
 
       if (
         status === "aprovado" &&
-        (
-          cargo === "Líder" ||
+        (cargo === "Líder" ||
           cargo === "Vice-Líder" ||
-          cargo === "Gerente Geral" ||
-          cargo === "Gerente de Compras"
-        )
+          cargo.includes("Gerente"))
       ) {
         setTemPermissao(true);
         await carregarCompras();
+        await carregarCaixa();
       } else {
         setTemPermissao(false);
       }
@@ -171,6 +227,16 @@ export default function ComprasPage() {
       return data && data >= inicioDoMes();
     })
     .reduce((total, compra) => total + (compra.valor || 0), 0);
+
+  const totalEntradasCaixa = historicoCaixa
+    .filter((mov) => mov.tipo === "entrada")
+    .reduce((total, mov) => total + (mov.valor || 0), 0);
+
+  const totalSaidasCaixa = historicoCaixa
+    .filter((mov) => mov.tipo === "saida")
+    .reduce((total, mov) => total + (mov.valor || 0), 0);
+
+  const saldoCaixa = totalEntradasCaixa - totalSaidasCaixa;
 
   if (carregando) {
     return (
@@ -203,14 +269,12 @@ export default function ComprasPage() {
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-8 text-center">
           <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
           <p className="mt-4 text-zinc-400">
-            Apenas Líder, Vice-Líder, Gerente Geral ou Gerente de Compras podem acessar esta área.
+            Apenas Líder, Vice-Líder ou Gerentes podem acessar esta área.
           </p>
         </div>
       </main>
     );
-  }
-
-  return (
+  }  return (
     <main className="min-h-screen bg-black p-10 text-white">
       <h1 className="text-5xl font-black text-red-600">🛒 COMPRAS</h1>
 
@@ -241,6 +305,50 @@ export default function ComprasPage() {
           <h2 className="mt-2 text-3xl font-black">{compras.length}</h2>
         </div>
       </div>
+
+      <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+        <h2 className="text-3xl font-bold">💰 Caixa da Facção</h2>
+
+        <div className="mt-5 grid gap-6 md:grid-cols-3">
+          <div className="rounded-xl border border-zinc-800 bg-black p-5">
+            <p className="text-zinc-400">Saldo atual</p>
+            <h3 className="mt-2 text-3xl font-black text-green-400">
+              {formatarDinheiro(saldoCaixa)}
+            </h3>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-black p-5">
+            <p className="text-zinc-400">Total adicionado</p>
+            <h3 className="mt-2 text-3xl font-black">
+              {formatarDinheiro(totalEntradasCaixa)}
+            </h3>
+          </div>
+
+          <div className="rounded-xl border border-zinc-800 bg-black p-5">
+            <p className="text-zinc-400">Total descontado em compras</p>
+            <h3 className="mt-2 text-3xl font-black text-red-500">
+              {formatarDinheiro(totalSaidasCaixa)}
+            </h3>
+          </div>
+        </div>
+
+        <div className="mt-5 flex flex-col gap-4 md:flex-row">
+          <input
+            value={saldoAdicionar}
+            onChange={(e) => setSaldoAdicionar(e.target.value)}
+            placeholder="Valor para adicionar ao caixa"
+            type="number"
+            className="rounded bg-black p-4 text-white md:w-80"
+          />
+
+          <button
+            onClick={adicionarSaldo}
+            className="rounded bg-green-700 px-6 py-3 font-bold hover:bg-green-600"
+          >
+            ➕ Adicionar Saldo
+          </button>
+        </div>
+      </section>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="text-3xl font-bold">Registrar Compra</h2>
