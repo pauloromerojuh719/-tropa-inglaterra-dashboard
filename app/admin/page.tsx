@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import {
-  
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -62,9 +62,7 @@ export default function AdminPage() {
       cargoLimpo === "Gerente de Produção" ||
       cargoLimpo === "Gerente de Ações"
     );
-  }
-
-  useEffect(() => {
+  }  useEffect(() => {
     async function verificarPermissao() {
       if (!session?.user) {
         setCarregando(false);
@@ -95,6 +93,7 @@ export default function AdminPage() {
         await carregarFarms();
         await carregarMembros();
         await carregarMetas();
+        await carregarAvisoPrincipal();
       } else {
         setTemPermissao(false);
       }
@@ -104,7 +103,17 @@ export default function AdminPage() {
 
     verificarPermissao();
   }, [session]);
-    async function carregarMetas() {
+
+  async function carregarAvisoPrincipal() {
+    const avisoSnap = await getDoc(doc(db, "avisos", "principal"));
+
+    if (avisoSnap.exists()) {
+      const aviso = avisoSnap.data() as { texto?: string };
+      setNovoAviso(aviso.texto || "");
+    }
+  }
+
+  async function carregarMetas() {
     const metasSnap = await getDoc(doc(db, "config", "metas"));
 
     if (metasSnap.exists()) {
@@ -115,9 +124,7 @@ export default function AdminPage() {
       setMetaSeringas(String(metas.seringas || 800));
       setMetaAgulhas(String(metas.agulhas || 800));
     }
-  }
-
-  async function salvarMetas() {
+  }  async function salvarMetas() {
     await setDoc(
       doc(db, "config", "metas"),
       {
@@ -132,6 +139,38 @@ export default function AdminPage() {
     alert("Metas salvas com sucesso!");
   }
 
+  async function criarAviso() {
+    if (!novoAviso.trim()) {
+      alert("Digite um aviso.");
+      return;
+    }
+
+    await setDoc(
+      doc(db, "avisos", "principal"),
+      {
+        texto: novoAviso,
+        atualizadoEm: new Date(),
+      },
+      { merge: true }
+    );
+
+    alert("Aviso principal atualizado!");
+  }
+
+  async function apagarAviso() {
+    const confirmar = confirm(
+      "Deseja apagar o aviso principal?"
+    );
+
+    if (!confirmar) return;
+
+    await deleteDoc(doc(db, "avisos", "principal"));
+
+    setNovoAviso("");
+
+    alert("Aviso apagado!");
+  }
+
   async function carregarFarms() {
     const snapshot = await getDocs(collection(db, "farm"));
 
@@ -140,7 +179,9 @@ export default function AdminPage() {
       ...(item.data() as Omit<Farm, "id">),
     }));
 
-    setFarms(lista.filter((farm) => farm.status === "pendente"));
+    setFarms(
+      lista.filter((farm) => farm.status === "pendente")
+    );
   }
 
   async function carregarMembros() {
@@ -151,28 +192,12 @@ export default function AdminPage() {
       ...(item.data() as Omit<Membro, "id">),
     }));
 
-    setMembros(lista.filter((membro) => membro.status?.trim() === "pendente"));
-  }
-
-  async function criarAviso() {
-  if (!novoAviso.trim()) {
-    alert("Digite um aviso.");
-    return;
-  }
-
-  await setDoc(
-    doc(db, "avisos", "principal"),
-    {
-      texto: novoAviso,
-      atualizadoEm: new Date(),
-    },
-    { merge: true }
-  );
-
-  alert("Aviso principal atualizado!");
-}
-
-  async function aprovarMembro(id: string, cargo: string) {
+    setMembros(
+      lista.filter(
+        (membro) => membro.status?.trim() === "pendente"
+      )
+    );
+  }  async function aprovarMembro(id: string, cargo: string) {
     await updateDoc(doc(db, "membros", id), {
       status: "aprovado",
       cargo: cargo || "Membro",
@@ -216,7 +241,9 @@ export default function AdminPage() {
 
     alert("Farm reprovado!");
     carregarFarms();
-  }  if (carregando) {
+  }
+
+  if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
@@ -255,9 +282,7 @@ export default function AdminPage() {
         </div>
       </main>
     );
-  }
-
-  return (
+  }  return (
     <main className="min-h-screen bg-black p-10 text-white">
       <h1 className="mb-8 text-5xl font-black text-red-600">
         ⚙️ PAINEL ADMIN
@@ -267,45 +292,19 @@ export default function AdminPage() {
         <h2 className="mb-5 text-3xl font-bold">🎯 Configurar Metas</h2>
 
         <div className="grid gap-4 md:grid-cols-4">
-          <input
-            value={metaFolhas}
-            onChange={(e) => setMetaFolhas(e.target.value)}
-            placeholder="Folhas"
-            className="rounded bg-black p-3"
-          />
-
-          <input
-            value={metaOpios}
-            onChange={(e) => setMetaOpios(e.target.value)}
-            placeholder="Ópios"
-            className="rounded bg-black p-3"
-          />
-
-          <input
-            value={metaSeringas}
-            onChange={(e) => setMetaSeringas(e.target.value)}
-            placeholder="Seringas"
-            className="rounded bg-black p-3"
-          />
-
-          <input
-            value={metaAgulhas}
-            onChange={(e) => setMetaAgulhas(e.target.value)}
-            placeholder="Agulhas"
-            className="rounded bg-black p-3"
-          />
+          <input value={metaFolhas} onChange={(e) => setMetaFolhas(e.target.value)} placeholder="Folhas" className="rounded bg-black p-3" />
+          <input value={metaOpios} onChange={(e) => setMetaOpios(e.target.value)} placeholder="Ópios" className="rounded bg-black p-3" />
+          <input value={metaSeringas} onChange={(e) => setMetaSeringas(e.target.value)} placeholder="Seringas" className="rounded bg-black p-3" />
+          <input value={metaAgulhas} onChange={(e) => setMetaAgulhas(e.target.value)} placeholder="Agulhas" className="rounded bg-black p-3" />
         </div>
 
-        <button
-          onClick={salvarMetas}
-          className="mt-5 rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
-        >
+        <button onClick={salvarMetas} className="mt-5 rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600">
           Salvar Metas
         </button>
       </section>
 
       <section className="mb-10 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="mb-5 text-3xl font-bold">📢 Criar Aviso</h2>
+        <h2 className="mb-5 text-3xl font-bold">📢 Aviso Principal</h2>
 
         <textarea
           value={novoAviso}
@@ -314,40 +313,31 @@ export default function AdminPage() {
           className="min-h-32 w-full rounded bg-black p-4 text-white"
         />
 
-        <button
-          onClick={criarAviso}
-          className="mt-4 rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
-        >
-          Publicar Aviso
+        <button onClick={criarAviso} className="mt-4 rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600">
+          Salvar Aviso
+        </button>
+
+        <button onClick={apagarAviso} className="ml-3 mt-4 rounded bg-zinc-700 px-6 py-3 font-bold hover:bg-zinc-600">
+          🗑️ Apagar Aviso
         </button>
       </section>
-            <section className="mb-10 rounded-xl border border-red-900 bg-zinc-950 p-6">
+
+      <section className="mb-10 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="mb-5 text-3xl font-bold">👥 Membros Pendentes</h2>
 
-        {membros.length === 0 && (
-          <p className="text-zinc-400">Nenhum membro pendente.</p>
-        )}
+        {membros.length === 0 && <p className="text-zinc-400">Nenhum membro pendente.</p>}
 
         <div className="grid gap-4 md:grid-cols-2">
           {membros.map((membro) => (
-            <div
-              key={membro.id}
-              className="rounded-xl border border-zinc-800 bg-black p-5"
-            >
-              <h3 className="text-2xl font-bold">
-                👤 {membro.nomeRP || membro.nome}
-              </h3>
+            <div key={membro.id} className="rounded-xl border border-zinc-800 bg-black p-5">
+              <h3 className="text-2xl font-bold">👤 {membro.nomeRP || membro.nome}</h3>
 
-              <p className="mt-2 text-zinc-400">
-                🎫 Passaporte: {membro.passaporte || "Não informado"}
-              </p>
-
+              <p className="mt-2 text-zinc-400">🎫 Passaporte: {membro.passaporte || "Não informado"}</p>
               <p className="text-zinc-400">🎮 Discord: {membro.nome}</p>
               <p className="text-zinc-400">📧 {membro.email || "Sem email"}</p>
 
               <p className="mt-3">
-                Status:{" "}
-                <strong className="text-yellow-400">{membro.status}</strong>
+                Status: <strong className="text-yellow-400">{membro.status}</strong>
               </p>
 
               <select
@@ -369,21 +359,13 @@ export default function AdminPage() {
 
               <div className="mt-5 flex gap-3">
                 <button
-                  onClick={() =>
-                    aprovarMembro(
-                      membro.id,
-                      membro.cargo === "Nenhum" ? "Membro" : membro.cargo
-                    )
-                  }
+                  onClick={() => aprovarMembro(membro.id, membro.cargo === "Nenhum" ? "Membro" : membro.cargo)}
                   className="rounded bg-green-700 px-5 py-3 font-bold hover:bg-green-600"
                 >
                   Aprovar
                 </button>
 
-                <button
-                  onClick={() => reprovarMembro(membro.id)}
-                  className="rounded bg-red-700 px-5 py-3 font-bold hover:bg-red-600"
-                >
+                <button onClick={() => reprovarMembro(membro.id)} className="rounded bg-red-700 px-5 py-3 font-bold hover:bg-red-600">
                   Reprovar
                 </button>
               </div>
@@ -395,18 +377,11 @@ export default function AdminPage() {
       <section className="rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="mb-5 text-3xl font-bold">📦 Farms Pendentes</h2>
 
-        {farms.length === 0 && (
-          <p className="text-zinc-400">Nenhum farm pendente.</p>
-        )}
+        {farms.length === 0 && <p className="text-zinc-400">Nenhum farm pendente.</p>}
 
         {farms.map((farm) => (
-          <div
-            key={farm.id}
-            className="mb-8 rounded-xl border border-red-900 bg-black p-6"
-          >
-            <p className="text-xl font-bold">
-              👤 {farm.membroNome || "Sem nome"}
-            </p>
+          <div key={farm.id} className="mb-8 rounded-xl border border-red-900 bg-black p-6">
+            <p className="text-xl font-bold">👤 {farm.membroNome || "Sem nome"}</p>
 
             <div className="mt-4 grid gap-2 md:grid-cols-4">
               <p>🍃 Folhas: {farm.folhas}</p>
@@ -415,26 +390,14 @@ export default function AdminPage() {
               <p>🪡 Agulhas: {farm.agulhas}</p>
             </div>
 
-            {farm.print && (
-              <img
-                src={farm.print}
-                alt="Print"
-                className="mt-5 max-h-96 w-full rounded-xl object-contain"
-              />
-            )}
+            {farm.print && <img src={farm.print} alt="Print" className="mt-5 max-h-96 w-full rounded-xl object-contain" />}
 
             <div className="mt-5 flex gap-4">
-              <button
-                onClick={() => aprovarFarm(farm)}
-                className="rounded bg-green-700 px-5 py-3 font-bold hover:bg-green-600"
-              >
+              <button onClick={() => aprovarFarm(farm)} className="rounded bg-green-700 px-5 py-3 font-bold hover:bg-green-600">
                 Aprovar Farm
               </button>
 
-              <button
-                onClick={() => reprovarFarm(farm.id)}
-                className="rounded bg-red-700 px-5 py-3 font-bold hover:bg-red-600"
-              >
+              <button onClick={() => reprovarFarm(farm.id)} className="rounded bg-red-700 px-5 py-3 font-bold hover:bg-red-600">
                 Reprovar Farm
               </button>
             </div>
