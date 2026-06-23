@@ -6,7 +6,7 @@ import { addDoc, collection, Timestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 export default function FarmPage() {
-  const { data: session } = useSession();
+  const { data: session, status } = useSession();
 
   const [folhas, setFolhas] = useState("");
   const [opios, setOpios] = useState("");
@@ -26,7 +26,10 @@ export default function FarmPage() {
   }
 
   async function enviarFarm() {
-    if (!session?.user) return;
+    if (!session?.user) {
+      alert("Você precisa estar logado.");
+      return;
+    }
 
     if (!folhas && !opios && !seringas && !agulhas) {
       alert("Preencha pelo menos uma quantidade.");
@@ -38,29 +41,46 @@ export default function FarmPage() {
       return;
     }
 
-    setEnviando(true);
+    try {
+      setEnviando(true);
 
-    await addDoc(collection(db, "farm"), {
-      membroNome: session.user.name || "Sem nome",
-      membroEmail: session.user.email || "",
-      membroId: (session.user as any).id || "",
-      folhas: Number(folhas || 0),
-      opios: Number(opios || 0),
-      seringas: Number(seringas || 0),
-      agulhas: Number(agulhas || 0),
-      print,
-      status: "pendente",
-      criadoEm: Timestamp.now(),
-    });
+      const discordId = (session.user as any).id || "";
 
-    setFolhas("");
-    setOpios("");
-    setSeringas("");
-    setAgulhas("");
-    setPrint("");
-    setEnviando(false);
+      await addDoc(collection(db, "farm"), {
+        membroNome: session.user.name || "Sem nome",
+        membroEmail: session.user.email || "",
+        membroId: discordId,
+        discordId: discordId,
+        folhas: Number(folhas || 0),
+        opios: Number(opios || 0),
+        seringas: Number(seringas || 0),
+        agulhas: Number(agulhas || 0),
+        print,
+        status: "pendente",
+        criadoEm: Timestamp.now(),
+      });
 
-    alert("Farm enviado para aprovação!");
+      setFolhas("");
+      setOpios("");
+      setSeringas("");
+      setAgulhas("");
+      setPrint("");
+
+      alert("Farm enviado para aprovação!");
+    } catch (error) {
+      console.error("Erro ao enviar farm:", error);
+      alert("Erro ao enviar farm. Verifique as permissões do Firebase.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  if (status === "loading") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-black text-white">
+        <p>Carregando...</p>
+      </main>
+    );
   }
 
   if (!session) {
