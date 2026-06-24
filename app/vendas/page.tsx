@@ -134,16 +134,17 @@ export default function VendasPage() {
 
       const membro = membroSnap.data() as Membro;
 
-      if (
-        membro.status === "aprovado" &&
-        (membro.cargo === "Líder" ||
-          membro.cargo === "Vice-Líder" ||
-          membro.cargo === "Gerente Geral" ||
-          membro.cargo === "Gerente de Vendas")
-      ) {
-        setTemPermissao(true);
-        await carregarVendas();
-      }
+      const cargo = membro.cargo?.trim() || "";
+
+if (
+  membro.status === "aprovado" &&
+  (cargo === "Líder" ||
+    cargo === "Vice-Líder" ||
+    cargo.includes("Gerente"))
+) {
+  setTemPermissao(true);
+  await carregarVendas();
+}
 
       setCarregando(false);
     }

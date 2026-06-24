@@ -153,16 +153,18 @@ export default function AcoesPage() {
 
       const membro = membroSnap.data() as Membro;
 
-      if (
-        membro.status === "aprovado" &&
-        (membro.cargo === "Líder" ||
-          membro.cargo === "Vice-Líder" ||
-          membro.cargo === "Gerente Geral" ||
-          membro.cargo === "Gerente de Ações")
-      ) {
-        setTemPermissao(true);
-        await carregarAcoes();
-      }
+      const cargo = membro.cargo?.trim() || "";
+const status = membro.status?.trim() || "";
+
+if (
+  status === "aprovado" &&
+  (cargo === "Líder" ||
+    cargo === "Vice-Líder" ||
+    cargo.includes("Gerente"))
+) {
+  setTemPermissao(true);
+  await carregarAcoes();
+}
 
       setCarregando(false);
     }

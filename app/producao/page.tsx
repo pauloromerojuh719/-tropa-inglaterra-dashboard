@@ -144,12 +144,11 @@ export default function ProducaoPage() {
       const status = membro.status?.trim();
 
       if (
-        status === "aprovado" &&
-        (cargo === "Líder" ||
-          cargo === "Vice-Líder" ||
-          cargo === "Gerente Geral" ||
-          cargo === "Gerente de Produção")
-      ) {
+  status === "aprovado" &&
+  (cargo === "Líder" ||
+    cargo === "Vice-Líder" ||
+    cargo.includes("Gerente"))
+) {
         setTemPermissao(true);
         await carregarProducoes();
       } else {
@@ -262,7 +261,7 @@ ${
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-8 text-center">
           <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
           <p className="mt-4 text-zinc-400">
-            Apenas Líder, Vice-Líder, Gerente Geral ou Gerente de Produção podem acessar esta área.
+           Apenas Líder, Vice-Líder ou Gerentes podem acessar esta área.
           </p>
         </div>
       </main>

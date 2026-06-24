@@ -83,10 +83,8 @@ export default function ControleFarmPage() {
       status === "aprovado" &&
       (
         cargo === "Líder" ||
-        cargo === "Vice-Líder" ||
-        cargo === "Gerente Geral" ||
-        cargo === "Gerente de Farm" ||
-        cargo === "Gerente de Produção"
+cargo === "Vice-Líder" ||
+cargo.includes("Gerente")
       )
     ) {
       setTemPermissao(true);

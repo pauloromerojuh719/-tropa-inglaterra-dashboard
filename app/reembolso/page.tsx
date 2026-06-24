@@ -157,15 +157,14 @@ export default function ReembolsoPage() {
       const status = membro.status?.trim();
 
       const cargosLiberados =
-        cargo === "Líder" ||
-        cargo === "Vice-Líder" ||
-        cargo === "Gerente Geral" ||
-        cargo === "Gerente de Produção";
+  cargo === "Líder" ||
+  cargo === "Vice-Líder" ||
+  cargo.includes("Gerente");
 
-      const cargosQuePodemPagar =
-        cargo === "Líder" ||
-        cargo === "Vice-Líder" ||
-        cargo === "Gerente Geral";
+const cargosQuePodemPagar =
+  cargo === "Líder" ||
+  cargo === "Vice-Líder" ||
+  cargo.includes("Gerente");
 
       if (status === "aprovado" && cargosLiberados) {
         setTemPermissao(true);
