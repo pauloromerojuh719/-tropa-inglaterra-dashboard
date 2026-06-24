@@ -74,7 +74,7 @@ type Farm = {
   criadoEm: any;
 };
 
-type Aba = "vendas" | "producao" | "compras";
+type Aba = "vendas" | "producao" | "compras" | "reembolsos" | "acoes";
 
 export default function RelatorioPage() {
   const { data: session } = useSession();
@@ -84,14 +84,9 @@ export default function RelatorioPage() {
   const [temPermissao, setTemPermissao] = useState(false);
   const [gerandoAdv, setGerandoAdv] = useState(false);
 
-  const [vendasSemana, setVendasSemana] = useState(0);
-  const [acoesSemana, setAcoesSemana] = useState(0);
-  const [comprasSemana, setComprasSemana] = useState(0);
-  const [reembolsosSemana, setReembolsosSemana] = useState(0);
-
   const [vendasDetalhadas, setVendasDetalhadas] = useState<Venda[]>([]);
   const [comprasDetalhadas, setComprasDetalhadas] = useState<Compra[]>([]);
-  const [producoesSemana, setProducoesSemana] = useState<Producao[]>([]);
+  const [producoesDetalhadas, setProducoesDetalhadas] = useState<Producao[]>([]);
   const [reembolsosDetalhados, setReembolsosDetalhados] = useState<Reembolso[]>([]);
   const [acoesDetalhadas, setAcoesDetalhadas] = useState<Acao[]>([]);
 
@@ -99,7 +94,8 @@ export default function RelatorioPage() {
   const META_OPIOS = 2000;
   const META_SERINGAS = 800;
   const META_AGULHAS = 800;
-    function inicioDaSemana() {
+
+  function inicioDaSemana() {
     const hoje = new Date();
     const dia = hoje.getDay();
     const diferenca = dia === 0 ? 6 : dia - 1;
@@ -124,9 +120,7 @@ export default function RelatorioPage() {
   function dataOk(data: any) {
     const d = data?.toDate?.();
     return d && d >= inicioDaSemana() && d <= fimDaSemana();
-  }
-
-  function formatarData(data: any) {
+  }  function formatarData(data: any) {
     const d = data?.toDate?.() || data;
     if (!d) return "Sem data";
     return d.toLocaleDateString("pt-BR");
@@ -143,7 +137,7 @@ export default function RelatorioPage() {
     });
   }
 
-  function somarPorPessoa<T extends { valor?: number }>(
+  function somarDinheiroPorPessoa<T extends { valor?: number }>(
     lista: T[],
     campoNome: keyof T
   ) {
@@ -165,8 +159,7 @@ export default function RelatorioPage() {
 
     lista.forEach((item) => {
       const nome = String(item[campoNome] || "Sem responsável");
-      resumo[nome] =
-        (resumo[nome] || 0) + Number(item.quantidade || 0);
+      resumo[nome] = (resumo[nome] || 0) + Number(item.quantidade || 0);
     });
 
     return resumo;
@@ -174,88 +167,68 @@ export default function RelatorioPage() {
 
   async function carregarRelatorios() {
     const vendasSnap = await getDocs(collection(db, "vendas"));
-    const acoesSnap = await getDocs(collection(db, "acoes"));
     const comprasSnap = await getDocs(collection(db, "compras"));
-    const reembolsosSnap = await getDocs(collection(db, "reembolsos"));
     const producoesSnap = await getDocs(collection(db, "producoes"));
+    const reembolsosSnap = await getDocs(collection(db, "reembolsos"));
+    const acoesSnap = await getDocs(collection(db, "acoes"));
 
     const vendas = vendasSnap.docs
       .map((docItem) => docItem.data() as Venda)
       .filter((v) => dataOk(v.criadoEm));
 
-    const acoes = acoesSnap.docs
-      .map((docItem) => docItem.data() as Acao)
-      .filter((a) => dataOk(a.criadoEm));
-
     const compras = comprasSnap.docs
       .map((docItem) => docItem.data() as Compra)
       .filter((c) => dataOk(c.criadoEm));
-
-    const reembolsos = reembolsosSnap.docs
-      .map((docItem) => docItem.data() as Reembolso)
-      .filter((r) => dataOk(r.criadoEm));
 
     const producoes = producoesSnap.docs
       .map((docItem) => docItem.data() as Producao)
       .filter((p) => dataOk(p.criadoEm));
 
+    const reembolsos = reembolsosSnap.docs
+      .map((docItem) => docItem.data() as Reembolso)
+      .filter((r) => dataOk(r.criadoEm));
+
+    const acoes = acoesSnap.docs
+      .map((docItem) => docItem.data() as Acao)
+      .filter((a) => dataOk(a.criadoEm));
+
     setVendasDetalhadas(vendas);
-    setAcoesDetalhadas(acoes);
     setComprasDetalhadas(compras);
+    setProducoesDetalhadas(producoes);
     setReembolsosDetalhados(reembolsos);
-    setProducoesSemana(producoes);
+    setAcoesDetalhadas(acoes);
+  }
 
-    setVendasSemana(
-      vendas.reduce((total, v) => total + Number(v.valor || 0), 0)
-    );
-
-    setAcoesSemana(
-      acoes.reduce((total, a) => total + Number(a.valor || 0), 0)
-    );
-
-    setComprasSemana(
-      compras.reduce((total, c) => total + Number(c.valor || 0), 0)
-    );
-
-    setReembolsosSemana(
-      reembolsos.reduce((total, r) => total + Number(r.valor || 0), 0)
-    );
-  }  async function gerarAdvertenciasAutomaticas() {
+  async function gerarAdvertenciasAutomaticas() {
     const confirmar = confirm(
       "Deseja gerar advertências automáticas para quem não bateu a meta da semana?"
     );
 
     if (!confirmar) return;
 
-    setGerandoAdv(true);
-
-    try {
+    setGerandoAdv(true);    try {
       const membrosSnap = await getDocs(collection(db, "membros"));
       const farmSnap = await getDocs(collection(db, "farm"));
       const advSnap = await getDocs(collection(db, "advertencias"));
 
-      const inicio = inicioDaSemana();
-      const fim = fimDaSemana();
-
-      const semanaInicio = inicio.toISOString();
-      const semanaFim = fim.toISOString();
+      const semanaInicio = inicioDaSemana().toISOString();
+      const semanaFim = fimDaSemana().toISOString();
 
       let criadas = 0;
 
       for (const membroDoc of membrosSnap.docs) {
         const membro = membroDoc.data() as Membro;
         const membroId = membroDoc.id;
-        const cargo = membro.cargo || "";
 
         const isento =
-          cargo === "Elite" ||
-          cargo === "Gerente de Ações" ||
-          cargo === "Líder" ||
-          cargo === "Vice-Líder";
+          membro.cargo === "Elite" ||
+          membro.cargo === "Gerente de Ações" ||
+          membro.cargo === "Líder" ||
+          membro.cargo === "Vice-Líder";
 
         if (membro.status !== "aprovado" || isento) continue;
 
-        const farmsDoMembro = farmSnap.docs
+        const farms = farmSnap.docs
           .map((f) => f.data() as Farm)
           .filter(
             (f) =>
@@ -264,37 +237,31 @@ export default function RelatorioPage() {
               dataOk(f.criadoEm)
           );
 
-        const totalFolhas = farmsDoMembro.reduce(
-          (t, f) => t + Number(f.folhas || 0),
-          0
-        );
-        const totalOpios = farmsDoMembro.reduce(
-          (t, f) => t + Number(f.opios || 0),
-          0
-        );
-        const totalSeringas = farmsDoMembro.reduce(
+        const folhas = farms.reduce((t, f) => t + Number(f.folhas || 0), 0);
+        const opios = farms.reduce((t, f) => t + Number(f.opios || 0), 0);
+        const seringas = farms.reduce(
           (t, f) => t + Number(f.seringas || 0),
           0
         );
-        const totalAgulhas = farmsDoMembro.reduce(
+        const agulhas = farms.reduce(
           (t, f) => t + Number(f.agulhas || 0),
           0
         );
 
         const bateuMeta =
-          totalFolhas >= META_FOLHAS &&
-          totalOpios >= META_OPIOS &&
-          totalSeringas >= META_SERINGAS &&
-          totalAgulhas >= META_AGULHAS;
+          folhas >= META_FOLHAS &&
+          opios >= META_OPIOS &&
+          seringas >= META_SERINGAS &&
+          agulhas >= META_AGULHAS;
 
         if (bateuMeta) continue;
 
         const jaExiste = advSnap.docs.some((adv) => {
           const a = adv.data() as any;
+
           return (
             a.membroId === membroId &&
-            a.semanaInicio === semanaInicio &&
-            a.tipo === "automatica"
+            a.semanaInicio === semanaInicio
           );
         });
 
@@ -303,15 +270,15 @@ export default function RelatorioPage() {
         await addDoc(collection(db, "advertencias"), {
           membroId,
           membroNome: membro.nomeRP || membro.nome || "Sem nome",
-          cargo,
+          cargo: membro.cargo,
           motivo: "Não bateu a meta semanal",
           tipo: "automatica",
           semanaInicio,
           semanaFim,
-          folhas: totalFolhas,
-          opios: totalOpios,
-          seringas: totalSeringas,
-          agulhas: totalAgulhas,
+          folhas,
+          opios,
+          seringas,
+          agulhas,
           criadoEm: Timestamp.now(),
         });
 
@@ -321,7 +288,7 @@ export default function RelatorioPage() {
       alert(`Advertências geradas: ${criadas}`);
     } catch (error) {
       console.log(error);
-      alert("Erro ao gerar advertências.");
+      alert("Erro ao gerar advertências");
     }
 
     setGerandoAdv(false);
@@ -335,6 +302,7 @@ export default function RelatorioPage() {
       }
 
       const discordId = (session.user as any).id;
+
       const snap = await getDoc(doc(db, "membros", discordId));
 
       if (!snap.exists()) {
@@ -343,13 +311,14 @@ export default function RelatorioPage() {
       }
 
       const membro = snap.data() as Membro;
-      const cargo = membro.cargo?.trim() || "";
 
       if (
         membro.status === "aprovado" &&
-        (cargo === "Líder" ||
-          cargo === "Vice-Líder" ||
-          cargo.includes("Gerente"))
+        (
+          membro.cargo === "Líder" ||
+          membro.cargo === "Vice-Líder" ||
+          membro.cargo.includes("Gerente")
+        )
       ) {
         setTemPermissao(true);
         await carregarRelatorios();
@@ -359,48 +328,50 @@ export default function RelatorioPage() {
     }
 
     verificar();
-  }, [session]);
-
-  const inicioSemana = inicioDaSemana();
+  }, [session]);  const inicioSemana = inicioDaSemana();
   const fimSemana = fimDaSemana();
 
-  const entradas = vendasSemana + acoesSemana;
-  const saidas = comprasSemana + reembolsosSemana;
-  const resultado = entradas - saidas;
+  const totalVendas = vendasDetalhadas.reduce(
+    (total, v) => total + Number(v.valor || 0),
+    0
+  );
 
-  const totalProducao = producoesSemana.reduce(
+  const totalCompras = comprasDetalhadas.reduce(
+    (total, c) => total + Number(c.valor || 0),
+    0
+  );
+
+  const totalProducoes = producoesDetalhadas.reduce(
     (total, p) => total + Number(p.quantidade || 0),
     0
-  );  const resumoProducaoPorItem: Record<string, number> = {};
-  producoesSemana.forEach((p) => {
-    const item = p.item || "Sem item";
-    resumoProducaoPorItem[item] =
-      (resumoProducaoPorItem[item] || 0) + Number(p.quantidade || 0);
-  });
+  );
 
-  const vendasPorPessoa = somarPorPessoa(vendasDetalhadas, "vendedor");
-  const comprasPorPessoa = somarPorPessoa(comprasDetalhadas, "comprador");
+  const totalReembolsos = reembolsosDetalhados.reduce(
+    (total, r) => total + Number(r.valor || 0),
+    0
+  );
+
+  const totalAcoes = acoesDetalhadas.reduce(
+    (total, a) => total + Number(a.valor || 0),
+    0
+  );
+
+  const vendasPorPessoa = somarDinheiroPorPessoa(vendasDetalhadas, "vendedor");
+  const comprasPorPessoa = somarDinheiroPorPessoa(comprasDetalhadas, "comprador");
   const producaoPorPessoa = somarQuantidadePorPessoa(
-    producoesSemana,
+    producoesDetalhadas,
     "responsavel"
   );
-  const reembolsosPorPessoa = somarPorPessoa(reembolsosDetalhados, "nome");
+  const reembolsoPorPessoa = somarDinheiroPorPessoa(reembolsosDetalhados, "nome");
+  const acoesPorPessoa = somarDinheiroPorPessoa(acoesDetalhadas, "responsavel");
 
   const textoVendas = `
 RELATÓRIO SEMANAL DE VENDAS - INGLATERRA
 
 Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
 
-RESUMO FINANCEIRO
-Entradas com Vendas: ${formatarDinheiro(vendasSemana)}
-Entradas com Ações: ${formatarDinheiro(acoesSemana)}
-Total de Entradas: ${formatarDinheiro(entradas)}
-
-Saídas com Compras: ${formatarDinheiro(comprasSemana)}
-Saídas com Reembolsos: ${formatarDinheiro(reembolsosSemana)}
-Total de Saídas: ${formatarDinheiro(saidas)}
-
-Resultado Final: ${formatarDinheiro(resultado)}
+TOTAL DE VENDAS
+${formatarDinheiro(totalVendas)}
 
 VENDAS DETALHADAS
 ${
@@ -420,83 +391,23 @@ ${
     : "Nenhuma venda registrada nessa semana."
 }
 
-AÇÕES DETALHADAS
-${
-  acoesDetalhadas.length
-    ? acoesDetalhadas
-        .map(
-          (a) =>
-            `Ação: ${a.tipo || "Sem tipo"} | Valor: ${formatarDinheiro(
-              Number(a.valor || 0)
-            )} | Status: ${a.status || "Não informado"} | Data: ${formatarData(
-              a.criadoEm
-            )}`
-        )
-        .join("\n")
-    : "Nenhuma ação registrada nessa semana."
-}
-
 RESUMO INDIVIDUAL DE VENDAS
 ${
   Object.keys(vendasPorPessoa).length
     ? Object.entries(vendasPorPessoa)
-        .map(([nome, total]) => `${nome}: ${formatarDinheiro(total)}`)
+        .map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`)
         .join("\n")
     : "Nenhum vendedor com registro nessa semana."
 }
 `.trim();
 
-  const textoProducao = `
-RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA
-
-Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
-
-RESUMO
-Total Produzido: ${formatarNumero(totalProducao)}
-Registros: ${producoesSemana.length}
-
-PRODUÇÃO DETALHADA
-${
-  producoesSemana.length
-    ? producoesSemana
-        .map(
-          (p) =>
-            `Item: ${p.item || "Sem item"} | Quantidade: ${formatarNumero(
-              Number(p.quantidade || 0)
-            )} | Responsável: ${
-              p.responsavel || "Sem responsável"
-            } | Data: ${formatarData(p.criadoEm)}`
-        )
-        .join("\n")
-    : "Nenhuma produção registrada nessa semana."
-}
-
-PRODUÇÃO POR ITEM
-${
-  Object.keys(resumoProducaoPorItem).length
-    ? Object.entries(resumoProducaoPorItem)
-        .map(([item, total]) => `${item}: ${formatarNumero(total)}`)
-        .join("\n")
-    : "Nenhuma produção por item nessa semana."
-}
-
-RESUMO INDIVIDUAL DE PRODUÇÃO
-${
-  Object.keys(producaoPorPessoa).length
-    ? Object.entries(producaoPorPessoa)
-        .map(([nome, total]) => `${nome}: ${formatarNumero(total)}`)
-        .join("\n")
-    : "Nenhum responsável com produção nessa semana."
-}
-`.trim();
-
-const textoCompras = `
+  const textoCompras = `
 RELATÓRIO SEMANAL DE COMPRAS - INGLATERRA
 
 Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
 
 TOTAL DE COMPRAS
-${formatarDinheiro(comprasSemana)}
+${formatarDinheiro(totalCompras)}
 
 COMPRAS DETALHADAS
 ${
@@ -508,9 +419,9 @@ ${
               Number(c.quantidade || 0)
             )} | Valor: ${formatarDinheiro(
               Number(c.valor || 0)
-            )} | Comprador: ${
-              c.comprador || "Sem comprador"
-            } | Data: ${formatarData(c.criadoEm)}`
+            )} | Comprador: ${c.comprador || "Sem comprador"} | Data: ${formatarData(
+              c.criadoEm
+            )}`
         )
         .join("\n")
     : "Nenhuma compra registrada nessa semana."
@@ -520,11 +431,51 @@ RESUMO INDIVIDUAL DE COMPRAS
 ${
   Object.keys(comprasPorPessoa).length
     ? Object.entries(comprasPorPessoa)
-        .map(([nome, total]) => `${nome}: ${formatarDinheiro(total)}`)
+        .map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`)
         .join("\n")
     : "Nenhum comprador com registro nessa semana."
 }
 `.trim();
+
+  const textoProducao = `
+RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL PRODUZIDO
+${formatarNumero(totalProducoes)}
+
+PRODUÇÃO DETALHADA
+${
+  producoesDetalhadas.length
+    ? producoesDetalhadas
+        .map(
+          (p) =>
+            `Item: ${p.item || "Sem item"} | Quantidade: ${formatarNumero(
+              Number(p.quantidade || 0)
+            )} | Responsável: ${p.responsavel || "Sem responsável"} | Data: ${formatarData(
+              p.criadoEm
+            )}`
+        )
+        .join("\n")
+    : "Nenhuma produção registrada nessa semana."
+}
+
+RESUMO INDIVIDUAL DE PRODUÇÃO
+${
+  Object.keys(producaoPorPessoa).length
+    ? Object.entries(producaoPorPessoa)
+        .map(([nome, total]) => `${nome}: ${formatarNumero(Number(total))}`)
+        .join("\n")
+    : "Nenhum responsável com produção nessa semana."
+}
+`.trim();  const textoReembolsos = `
+RELATÓRIO SEMANAL DE REEMBOLSOS - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL DE REEMBOLSOS
+${formatarDinheiro(totalReembolsos)}
 
 REEMBOLSOS DETALHADOS
 ${
@@ -546,22 +497,47 @@ ${
     : "Nenhum reembolso registrado nessa semana."
 }
 
-RESUMO INDIVIDUAL DE COMPRAS
-${
-  Object.keys(comprasPorPessoa).length
-    ? Object.entries(comprasPorPessoa)
-        .map(([nome, total]) => `${nome}: ${formatarDinheiro(total)}`)
-        .join("\n")
-    : "Nenhum comprador com registro nessa semana."
-}
-
 RESUMO INDIVIDUAL DE REEMBOLSOS
 ${
-  Object.keys(reembolsosPorPessoa).length
-    ? Object.entries(reembolsosPorPessoa)
-        .map(([nome, total]) => `${nome}: ${formatarDinheiro(total)}`)
+  Object.keys(reembolsoPorPessoa).length
+    ? Object.entries(reembolsoPorPessoa)
+        .map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`)
         .join("\n")
-    : "Nenhum reembolso individual nessa semana."
+    : "Nenhum reembolso registrado."
+}
+`.trim();
+
+  const textoAcoes = `
+RELATÓRIO SEMANAL DE AÇÕES - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL DE AÇÕES
+${formatarDinheiro(totalAcoes)}
+
+AÇÕES DETALHADAS
+${
+  acoesDetalhadas.length
+    ? acoesDetalhadas
+        .map(
+          (a) =>
+            `Ação: ${a.tipo || "Sem tipo"} | Valor: ${formatarDinheiro(
+              Number(a.valor || 0)
+            )} | Status: ${a.status || "Não informado"} | Responsável: ${
+              a.responsavel || "Sem responsável"
+            } | Data: ${formatarData(a.criadoEm)}`
+        )
+        .join("\n")
+    : "Nenhuma ação registrada nessa semana."
+}
+
+RESUMO INDIVIDUAL DE AÇÕES
+${
+  Object.keys(acoesPorPessoa).length
+    ? Object.entries(acoesPorPessoa)
+        .map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`)
+        .join("\n")
+    : "Nenhuma ação registrada."
 }
 `.trim();
 
@@ -574,6 +550,7 @@ ${
     pdf.setFontSize(11);
 
     const linhas = pdf.splitTextToSize(texto, 180);
+
     let y = 30;
 
     linhas.forEach((linha: string) => {
@@ -587,9 +564,12 @@ ${
     });
 
     pdf.save(nomeArquivo);
-  }  if (carregando) {
+  }
+  if (carregando) {
     return (
-      <main className="min-h-screen bg-black p-10 text-white">Carregando...</main>
+      <main className="min-h-screen bg-black p-10 text-white">
+        Carregando...
+      </main>
     );
   }
 
@@ -627,116 +607,66 @@ ${
         disabled={gerandoAdv}
         className="mt-6 rounded bg-yellow-600 px-6 py-3 font-bold text-black disabled:opacity-50"
       >
-        {gerandoAdv
-          ? "Gerando advertências..."
-          : "⚠️ Gerar Advertências Automáticas"}
+        {gerandoAdv ? "Gerando advertências..." : "⚠️ Gerar Advertências Automáticas"}
       </button>
 
       <div className="mt-8 flex flex-wrap gap-3">
-        <BotaoAba ativo={aba === "vendas"} onClick={() => setAba("vendas")}>
-          💰 Vendas
-        </BotaoAba>
-
-        <BotaoAba ativo={aba === "producao"} onClick={() => setAba("producao")}>
-          🏭 Produção
-        </BotaoAba>
-
-        <BotaoAba ativo={aba === "compras"} onClick={() => setAba("compras")}>
-          🛒 Compras
-        </BotaoAba>
+        <BotaoAba ativo={aba === "vendas"} onClick={() => setAba("vendas")}>💰 Vendas</BotaoAba>
+        <BotaoAba ativo={aba === "compras"} onClick={() => setAba("compras")}>🛒 Compras</BotaoAba>
+        <BotaoAba ativo={aba === "producao"} onClick={() => setAba("producao")}>🏭 Produção</BotaoAba>
+        <BotaoAba ativo={aba === "reembolsos"} onClick={() => setAba("reembolsos")}>💸 Reembolsos</BotaoAba>
+        <BotaoAba ativo={aba === "acoes"} onClick={() => setAba("acoes")}>🎯 Ações</BotaoAba>
       </div>
 
-      {aba === "vendas" && (
-        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-          <h2 className="text-3xl font-bold">💰 Relatório de Vendas</h2>
+      <RelatorioBox
+        mostrar={aba === "vendas"}
+        titulo="💰 Relatório de Vendas"
+        totalTitulo="Total de Vendas"
+        total={formatarDinheiro(totalVendas)}
+        registros={vendasDetalhadas.length}
+        texto={textoVendas}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE VENDAS", textoVendas, "relatorio-vendas-inglaterra.pdf")}
+      />
 
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <Card titulo="Entradas" valor={formatarDinheiro(entradas)} />
-            <Card titulo="Saídas" valor={formatarDinheiro(saidas)} />
-            <Card titulo="Resultado" valor={formatarDinheiro(resultado)} />
-          </div>
+      <RelatorioBox
+        mostrar={aba === "compras"}
+        titulo="🛒 Relatório de Compras"
+        totalTitulo="Total de Compras"
+        total={formatarDinheiro(totalCompras)}
+        registros={comprasDetalhadas.length}
+        texto={textoCompras}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE COMPRAS", textoCompras, "relatorio-compras-inglaterra.pdf")}
+      />
 
-          <textarea
-            value={textoVendas}
-            readOnly
-            className="mt-6 h-96 w-full rounded bg-black p-4 text-white"
-          />
+      <RelatorioBox
+        mostrar={aba === "producao"}
+        titulo="🏭 Relatório de Produção"
+        totalTitulo="Total Produzido"
+        total={formatarNumero(totalProducoes)}
+        registros={producoesDetalhadas.length}
+        texto={textoProducao}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE PRODUÇÃO", textoProducao, "relatorio-producao-inglaterra.pdf")}
+      />
 
-          <button
-            onClick={() =>
-              gerarPDF(
-                "RELATÓRIO SEMANAL DE VENDAS",
-                textoVendas,
-                "relatorio-vendas-inglaterra.pdf"
-              )
-            }
-            className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
-          >
-            📄 Gerar PDF de Vendas
-          </button>
-        </section>
-      )}
+      <RelatorioBox
+        mostrar={aba === "reembolsos"}
+        titulo="💸 Relatório de Reembolsos"
+        totalTitulo="Total de Reembolsos"
+        total={formatarDinheiro(totalReembolsos)}
+        registros={reembolsosDetalhados.length}
+        texto={textoReembolsos}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE REEMBOLSOS", textoReembolsos, "relatorio-reembolsos-inglaterra.pdf")}
+      />
 
-      {aba === "producao" && (
-        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-          <h2 className="text-3xl font-bold">🏭 Relatório de Produção</h2>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <Card titulo="Produção da Semana" valor={formatarNumero(totalProducao)} />
-            <Card titulo="Registros" valor={String(producoesSemana.length)} />
-          </div>
-
-          <textarea
-            value={textoProducao}
-            readOnly
-            className="mt-6 h-96 w-full rounded bg-black p-4 text-white"
-          />
-
-          <button
-            onClick={() =>
-              gerarPDF(
-                "RELATÓRIO SEMANAL DE PRODUÇÃO",
-                textoProducao,
-                "relatorio-producao-inglaterra.pdf"
-              )
-            }
-            className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
-          >
-            📄 Gerar PDF de Produção
-          </button>
-        </section>
-      )}
-
-      {aba === "compras" && (
-        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-          <h2 className="text-3xl font-bold">🛒 Relatório de Compras</h2>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-3">
-            <Card titulo="Compras" valor={formatarDinheiro(comprasSemana)} />
-            <Card titulo="Reembolsos" valor={formatarDinheiro(reembolsosSemana)} />
-            <Card titulo="Total Gasto" valor={formatarDinheiro(saidas)} />
-          </div>
-
-          <textarea
-            value={textoCompras}
-            readOnly
-            className="mt-6 h-96 w-full rounded bg-black p-4 text-white"
-          />
-
-          <button
-            onClick={() =>
-              gerarPDF(
-                "RELATÓRIO SEMANAL DE COMPRAS",
-                textoCompras,
-                "relatorio-compras-inglaterra.pdf"
-              )
-            }
-            className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
-          >
-            📄 Gerar PDF de Compras
-          </button>
-        </section>
-      )}
+      <RelatorioBox
+        mostrar={aba === "acoes"}
+        titulo="🎯 Relatório de Ações"
+        totalTitulo="Total de Ações"
+        total={formatarDinheiro(totalAcoes)}
+        registros={acoesDetalhadas.length}
+        texto={textoAcoes}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE AÇÕES", textoAcoes, "relatorio-acoes-inglaterra.pdf")}
+      />
     </main>
   );
 }
@@ -768,5 +698,49 @@ function Card({ titulo, valor }: { titulo: string; valor: string }) {
       <p className="text-zinc-400">{titulo}</p>
       <h2 className="mt-2 text-3xl font-black text-red-500">{valor}</h2>
     </div>
+  );
+}
+
+function RelatorioBox({
+  mostrar,
+  titulo,
+  totalTitulo,
+  total,
+  registros,
+  texto,
+  gerar,
+}: {
+  mostrar: boolean;
+  titulo: string;
+  totalTitulo: string;
+  total: string;
+  registros: number;
+  texto: string;
+  gerar: () => void;
+}) {
+  if (!mostrar) return null;
+
+  return (
+    <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+      <h2 className="text-3xl font-bold">{titulo}</h2>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <Card titulo={totalTitulo} valor={total} />
+        <Card titulo="Registros" valor={String(registros)} />
+      </div>
+
+      <textarea
+        value={texto}
+        readOnly
+        className="mt-6 h-96 w-full rounded bg-black p-4 text-white"
+      />
+
+      <button
+        onClick={gerar}
+        className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
+      >
+        📄 Gerar PDF
+      </button>
+    </section>
   );
 }
