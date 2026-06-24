@@ -516,8 +516,20 @@ export default function Home() {
                   </Link>
 
                   <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    🛒 COMPRAS
-                  </Link>
+  🛒 COMPRAS
+</Link>
+
+<Link href="/contatos" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+  📞 CONTATOS
+</Link>
+
+<Link href="/programacao-semanal" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+  📅 PROGRAMAÇÃO
+</Link>
+
+<Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+  💰 VENDAS
+</Link>
 
                   <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                     💰 VENDAS

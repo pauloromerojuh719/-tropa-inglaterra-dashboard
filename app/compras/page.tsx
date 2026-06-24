@@ -5,10 +5,12 @@ import { useSession, signIn } from "next-auth/react";
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   getDocs,
   Timestamp,
+  updateDoc,
 } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
@@ -45,8 +47,10 @@ export default function ComprasPage() {
   const [quantidade, setQuantidade] = useState("");
   const [valor, setValor] = useState("");
   const [compras, setCompras] = useState<Compra[]>([]);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
 
   const [saldoAdicionar, setSaldoAdicionar] = useState("");
+  const [saldoRetirar, setSaldoRetirar] = useState("");
   const [historicoCaixa, setHistoricoCaixa] = useState<MovimentoCaixa[]>([]);
 
   function formatarDinheiro(valor: number) {
@@ -76,12 +80,14 @@ export default function ComprasPage() {
   function inicioDoMes() {
     const hoje = new Date();
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-  }  async function carregarCompras() {
+  }
+
+  async function carregarCompras() {
     const snapshot = await getDocs(collection(db, "compras"));
 
-    const lista = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as Omit<Compra, "id">),
+    const lista = snapshot.docs.map((documento) => ({
+      id: documento.id,
+      ...(documento.data() as Omit<Compra, "id">),
     })) as Compra[];
 
     lista.sort((a, b) => {
@@ -96,9 +102,9 @@ export default function ComprasPage() {
   async function carregarCaixa() {
     const snapshot = await getDocs(collection(db, "caixa"));
 
-    const lista = snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...(doc.data() as Omit<MovimentoCaixa, "id">),
+    const lista = snapshot.docs.map((documento) => ({
+      id: documento.id,
+      ...(documento.data() as Omit<MovimentoCaixa, "id">),
     })) as MovimentoCaixa[];
 
     lista.sort((a, b) => {
@@ -108,6 +114,11 @@ export default function ComprasPage() {
     });
 
     setHistoricoCaixa(lista);
+  }  function limparFormulario() {
+    setItem("");
+    setQuantidade("");
+    setValor("");
+    setEditandoId(null);
   }
 
   async function adicionarSaldo() {
@@ -132,6 +143,28 @@ export default function ComprasPage() {
     alert("Saldo adicionado!");
   }
 
+  async function retirarSaldo() {
+    if (!session?.user) return;
+
+    if (!saldoRetirar) {
+      alert("Digite o valor para retirar.");
+      return;
+    }
+
+    await addDoc(collection(db, "caixa"), {
+      tipo: "saida",
+      valor: Number(saldoRetirar),
+      descricao: "Saldo retirado manualmente",
+      responsavel: session.user.name || "Sem nome",
+      criadoEm: Timestamp.now(),
+    });
+
+    setSaldoRetirar("");
+    await carregarCaixa();
+
+    alert("Saldo retirado!");
+  }
+
   async function salvarCompra() {
     if (!session?.user) return;
 
@@ -140,31 +173,109 @@ export default function ComprasPage() {
       return;
     }
 
-    await addDoc(collection(db, "compras"), {
+    const novoValor = Number(valor);
+
+    const dados = {
       item,
       quantidade: Number(quantidade),
-      valor: Number(valor),
+      valor: novoValor,
       comprador: session.user.name || "Sem nome",
+    };
+
+    if (editandoId) {
+      const compraAntiga = compras.find((compra) => compra.id === editandoId);
+
+      if (!compraAntiga) {
+        alert("Compra não encontrada.");
+        return;
+      }
+
+      const diferenca = novoValor - compraAntiga.valor;
+
+      await updateDoc(doc(db, "compras", editandoId), dados);
+
+      if (diferenca > 0) {
+        await addDoc(collection(db, "caixa"), {
+          tipo: "saida",
+          valor: diferenca,
+          descricao: `Ajuste compra: ${item}`,
+          responsavel: session.user.name || "Sem nome",
+          criadoEm: Timestamp.now(),
+        });
+      }
+
+      if (diferenca < 0) {
+        await addDoc(collection(db, "caixa"), {
+          tipo: "entrada",
+          valor: Math.abs(diferenca),
+          descricao: `Estorno ajuste compra: ${item}`,
+          responsavel: session.user.name || "Sem nome",
+          criadoEm: Timestamp.now(),
+        });
+      }
+
+      limparFormulario();
+      await carregarCompras();
+      await carregarCaixa();
+
+      alert("Compra atualizada e caixa ajustado!");
+      return;
+    }
+
+    await addDoc(collection(db, "compras"), {
+      ...dados,
       criadoEm: Timestamp.now(),
     });
 
     await addDoc(collection(db, "caixa"), {
       tipo: "saida",
-      valor: Number(valor),
+      valor: novoValor,
       descricao: `Compra: ${item}`,
       responsavel: session.user.name || "Sem nome",
       criadoEm: Timestamp.now(),
     });
 
-    setItem("");
-    setQuantidade("");
-    setValor("");
+    limparFormulario();
 
     await carregarCompras();
     await carregarCaixa();
 
     alert("Compra registrada e descontada do caixa!");
-  }  useEffect(() => {
+  }  function editarCompra(compra: Compra) {
+    setEditandoId(compra.id);
+    setItem(compra.item);
+    setQuantidade(String(compra.quantidade));
+    setValor(String(compra.valor));
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function excluirCompra(compra: Compra) {
+    if (!session?.user) return;
+
+    const confirmar = confirm(
+      "Tem certeza que deseja excluir esta compra? O valor será devolvido ao caixa."
+    );
+
+    if (!confirmar) return;
+
+    await deleteDoc(doc(db, "compras", compra.id));
+
+    await addDoc(collection(db, "caixa"), {
+      tipo: "entrada",
+      valor: compra.valor,
+      descricao: `Estorno da compra: ${compra.item}`,
+      responsavel: session.user.name || "Sem nome",
+      criadoEm: Timestamp.now(),
+    });
+
+    await carregarCompras();
+    await carregarCaixa();
+
+    alert("Compra excluída e valor devolvido ao caixa!");
+  }
+
+  useEffect(() => {
     async function verificarPermissao() {
       if (!session?.user) {
         setCarregando(false);
@@ -228,17 +339,16 @@ export default function ComprasPage() {
     })
     .reduce((total, compra) => total + (compra.valor || 0), 0);
 
-  const totalEntradasCaixa = historicoCaixa
-    .filter((mov) => mov.tipo === "entrada")
-    .reduce((total, mov) => total + (mov.valor || 0), 0);
+const totalEntradasCaixa = historicoCaixa
+  .filter((mov) => mov.tipo === "entrada")
+  .reduce((total, mov) => total + (mov.valor || 0), 0);
 
-  const totalSaidasCaixa = historicoCaixa
-    .filter((mov) => mov.tipo === "saida")
-    .reduce((total, mov) => total + (mov.valor || 0), 0);
+const totalSaidasCaixa = historicoCaixa
+  .filter((mov) => mov.tipo === "saida")
+  .reduce((total, mov) => total + (mov.valor || 0), 0);
 
-  const saldoCaixa = totalEntradasCaixa - totalSaidasCaixa;
-
-  if (carregando) {
+const saldoCaixa = totalEntradasCaixa - totalSaidasCaixa;
+    if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
@@ -274,7 +384,9 @@ export default function ComprasPage() {
         </div>
       </main>
     );
-  }  return (
+  }
+
+  return (
     <main className="min-h-screen bg-black p-10 text-white">
       <h1 className="text-5xl font-black text-red-600">🛒 COMPRAS</h1>
 
@@ -318,40 +430,62 @@ export default function ComprasPage() {
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-black p-5">
-            <p className="text-zinc-400">Total adicionado</p>
-            <h3 className="mt-2 text-3xl font-black">
-              {formatarDinheiro(totalEntradasCaixa)}
-            </h3>
+            <p className="text-zinc-400">Saldo Disponível</p>
+
+<h3 className="mt-2 text-3xl font-black">
+  {formatarDinheiro(saldoCaixa)}
+</h3>
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-black p-5">
-            <p className="text-zinc-400">Total descontado em compras</p>
+            <p className="text-zinc-400">Total de saídas</p>
             <h3 className="mt-2 text-3xl font-black text-red-500">
               {formatarDinheiro(totalSaidasCaixa)}
             </h3>
           </div>
         </div>
 
-        <div className="mt-5 flex flex-col gap-4 md:flex-row">
-          <input
-            value={saldoAdicionar}
-            onChange={(e) => setSaldoAdicionar(e.target.value)}
-            placeholder="Valor para adicionar ao caixa"
-            type="number"
-            className="rounded bg-black p-4 text-white md:w-80"
-          />
+        <div className="mt-5 grid gap-4 md:grid-cols-2">
+          <div className="flex flex-col gap-4 md:flex-row">
+            <input
+              value={saldoAdicionar}
+              onChange={(e) => setSaldoAdicionar(e.target.value)}
+              placeholder="Valor para adicionar ao caixa"
+              type="number"
+              className="rounded bg-black p-4 text-white md:w-80"
+            />
 
-          <button
-            onClick={adicionarSaldo}
-            className="rounded bg-green-700 px-6 py-3 font-bold hover:bg-green-600"
-          >
-            ➕ Adicionar Saldo
-          </button>
+            <button
+              onClick={adicionarSaldo}
+              className="rounded bg-green-700 px-6 py-3 font-bold hover:bg-green-600"
+            >
+              ➕ Adicionar Saldo
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-4 md:flex-row">
+            <input
+              value={saldoRetirar}
+              onChange={(e) => setSaldoRetirar(e.target.value)}
+              placeholder="Valor para retirar do caixa"
+              type="number"
+              className="rounded bg-black p-4 text-white md:w-80"
+            />
+
+            <button
+              onClick={retirarSaldo}
+              className="rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
+            >
+              ➖ Retirar Saldo
+            </button>
+          </div>
         </div>
       </section>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">Registrar Compra</h2>
+        <h2 className="text-3xl font-bold">
+          {editandoId ? "Editar Compra" : "Registrar Compra"}
+        </h2>
 
         <div className="mt-5 grid gap-4 md:grid-cols-3">
           <input
@@ -378,12 +512,23 @@ export default function ComprasPage() {
           />
         </div>
 
-        <button
-          onClick={salvarCompra}
-          className="mt-5 rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
-        >
-          Salvar Compra
-        </button>
+        <div className="mt-5 flex gap-3">
+          <button
+            onClick={salvarCompra}
+            className="rounded bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
+          >
+            {editandoId ? "Salvar Alteração" : "Salvar Compra"}
+          </button>
+
+          {editandoId && (
+            <button
+              onClick={limparFormulario}
+              className="rounded bg-zinc-700 px-6 py-3 font-bold hover:bg-zinc-600"
+            >
+              Cancelar Edição
+            </button>
+          )}
+        </div>
       </section>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
@@ -413,6 +558,22 @@ export default function ComprasPage() {
                     <p className="text-zinc-400">
                       Data: {formatarData(compra.criadoEm)}
                     </p>
+
+                    <div className="mt-4 flex gap-2">
+                      <button
+                        onClick={() => editarCompra(compra)}
+                        className="rounded bg-yellow-600 px-4 py-2 font-bold hover:bg-yellow-500"
+                      >
+                        ✏️ Editar
+                      </button>
+
+                      <button
+                        onClick={() => excluirCompra(compra)}
+                        className="rounded bg-red-700 px-4 py-2 font-bold hover:bg-red-600"
+                      >
+                        🗑️ Excluir
+                      </button>
+                    </div>
                   </div>
 
                   <p className="text-2xl font-black text-red-500">
