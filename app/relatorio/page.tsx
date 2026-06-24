@@ -490,15 +490,13 @@ ${
 }
 `.trim();
 
-  const textoCompras = `
+const textoCompras = `
 RELATÓRIO SEMANAL DE COMPRAS - INGLATERRA
 
 Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
 
-RESUMO
-Total em Compras: ${formatarDinheiro(comprasSemana)}
-Total em Reembolsos: ${formatarDinheiro(reembolsosSemana)}
-Total Gasto: ${formatarDinheiro(saidas)}
+TOTAL DE COMPRAS
+${formatarDinheiro(comprasSemana)}
 
 COMPRAS DETALHADAS
 ${
@@ -510,13 +508,23 @@ ${
               Number(c.quantidade || 0)
             )} | Valor: ${formatarDinheiro(
               Number(c.valor || 0)
-            )} | Comprador: ${c.comprador || "Sem comprador"} | Data: ${formatarData(
-              c.criadoEm
-            )}`
+            )} | Comprador: ${
+              c.comprador || "Sem comprador"
+            } | Data: ${formatarData(c.criadoEm)}`
         )
         .join("\n")
     : "Nenhuma compra registrada nessa semana."
 }
+
+RESUMO INDIVIDUAL DE COMPRAS
+${
+  Object.keys(comprasPorPessoa).length
+    ? Object.entries(comprasPorPessoa)
+        .map(([nome, total]) => `${nome}: ${formatarDinheiro(total)}`)
+        .join("\n")
+    : "Nenhum comprador com registro nessa semana."
+}
+`.trim();
 
 REEMBOLSOS DETALHADOS
 ${
