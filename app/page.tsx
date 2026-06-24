@@ -531,10 +531,7 @@ export default function Home() {
   💰 VENDAS
 </Link>
 
-                  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    💰 VENDAS
-                  </Link>
-
+                 
                   <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                     🏭 PRODUÇÃO
                   </Link>
