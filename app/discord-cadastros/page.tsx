@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 type Pendente = {
   discordId: string;
@@ -19,6 +19,10 @@ type Resultado = {
 export default function DiscordCadastrosPage() {
   const [carregando, setCarregando] = useState(false);
   const [resultado, setResultado] = useState<Resultado | null>(null);
+
+  useEffect(() => {
+    sincronizar();
+  }, []);
 
   async function sincronizar() {
     setCarregando(true);
