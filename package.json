@@ -9,6 +9,8 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "discord.js": "^14.26.4",
+    "dotenv": "^17.4.2",
     "firebase": "^12.15.0",
     "jspdf": "^4.2.1",
     "next": "16.2.9",
