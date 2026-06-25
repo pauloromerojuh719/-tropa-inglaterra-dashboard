@@ -9,22 +9,43 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 
+function limparCargo(cargo: string) {
+  return cargo
+    .replace(/[^\p{L}\p{N}\s-]/gu, "")
+    .trim();
+}
+
 function descobrirCargo(cargos: string[]) {
-  const ordem = [
+  const cargosLimpos = cargos.map(limparCargo);
+
+  const mapaCargos: Record<string, string> = {
+    "Líder": "Líder",
+    "Vice-Líder": "Vice-Líder",
+    "Gerente Geral": "Gerente Geral",
+    "Gerente": "Gerente Geral",
+    "Elite Alfa": "Elite",
+    "Membro": "Membro",
+    "Admin Farm": "Gerente de Farm",
+    "Gerente Farm": "Gerente de Farm",
+    "Gerente de Ação": "Gerente de Ações",
+  };
+
+  const prioridade = [
     "Líder",
     "Vice-Líder",
     "Gerente Geral",
-    "Gerente de Farm",
-    "Gerente de Vendas",
-    "Gerente de Produção",
-    "Gerente de Compras",
-    "Gerente de Ações",
-    "Elite",
+    "Gerente",
+    "Admin Farm",
+    "Gerente Farm",
+    "Gerente de Ação",
+    "Elite Alfa",
     "Membro",
   ];
 
-  for (const cargo of ordem) {
-    if (cargos.includes(cargo)) return cargo;
+  for (const cargoDiscord of prioridade) {
+    if (cargosLimpos.includes(cargoDiscord)) {
+      return mapaCargos[cargoDiscord];
+    }
   }
 
   return "Membro";
