@@ -44,6 +44,7 @@ export default function ControleFarmPage() {
     useState<ResumoMembro | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [imagemAberta, setImagemAberta] = useState<string | null>(null);
 
   useEffect(() => {
     verificarPermissao();
@@ -81,11 +82,9 @@ export default function ControleFarmPage() {
 
     if (
       status === "aprovado" &&
-      (
-        cargo === "Líder" ||
-cargo === "Vice-Líder" ||
-cargo.includes("Gerente")
-      )
+      (cargo === "Líder" ||
+        cargo === "Vice-Líder" ||
+        cargo?.includes("Gerente"))
     ) {
       setTemPermissao(true);
       await carregarControleFarm();
@@ -94,7 +93,9 @@ cargo.includes("Gerente")
     }
 
     setCarregando(false);
-  }  async function carregarControleFarm() {
+  }
+
+  async function carregarControleFarm() {
     const snapshot = await getDocs(collection(db, "farm"));
 
     const mapa: Record<string, ResumoMembro> = {};
@@ -174,7 +175,9 @@ cargo.includes("Gerente")
   }
 
   const listaFarmsMembro = farmsDoMembro();
-  const ultimoFarm = listaFarmsMembro[0];  if (carregando) {
+  const ultimoFarm = listaFarmsMembro[0];
+
+  if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
@@ -258,7 +261,7 @@ cargo.includes("Gerente")
 
                     <button
                       onClick={() => setMembroSelecionado(membro)}
-                      className="mt-4 rounded bg-red-700 px-4 py-2 font-bold"
+                      className="mt-4 rounded bg-red-700 px-4 py-2 font-bold hover:bg-red-600"
                     >
                       Ver Perfil Farm
                     </button>
@@ -273,7 +276,9 @@ cargo.includes("Gerente")
                     <div>
                       <p className="text-sm text-zinc-400">Ópios</p>
                       <p className="text-xl font-black">{membro.opios}</p>
-                    </div>                    <div>
+                    </div>
+
+                    <div>
                       <p className="text-sm text-zinc-400">Seringas</p>
                       <p className="text-xl font-black">{membro.seringas}</p>
                     </div>
@@ -306,7 +311,7 @@ cargo.includes("Gerente")
 
             <button
               onClick={() => setMembroSelecionado(null)}
-              className="rounded bg-zinc-800 px-4 py-2 font-bold"
+              className="rounded bg-zinc-800 px-4 py-2 font-bold hover:bg-zinc-700"
             >
               Fechar
             </button>
@@ -360,9 +365,7 @@ cargo.includes("Gerente")
 
             <p className="mt-2">
               🕒 Último farm:{" "}
-              {ultimoFarm
-                ? formatarData(ultimoFarm.criadoEm)
-                : "Sem farm"}
+              {ultimoFarm ? formatarData(ultimoFarm.criadoEm) : "Sem farm"}
             </p>
 
             <p className="mt-2">
@@ -370,15 +373,11 @@ cargo.includes("Gerente")
             </p>
           </div>
 
-          <h3 className="mt-8 text-2xl font-bold">
-            📸 Prints enviados
-          </h3>
+          <h3 className="mt-8 text-2xl font-bold">📸 Prints enviados</h3>
 
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             {listaFarmsMembro.length === 0 ? (
-              <p className="text-zinc-400">
-                Nenhum print encontrado.
-              </p>
+              <p className="text-zinc-400">Nenhum print encontrado.</p>
             ) : (
               listaFarmsMembro.map((farm) => (
                 <div
@@ -398,7 +397,8 @@ cargo.includes("Gerente")
                     <img
                       src={farm.print}
                       alt="Print do farm"
-                      className="mt-3 h-40 rounded border border-zinc-700"
+                      onClick={() => setImagemAberta(farm.print || "")}
+                      className="mt-3 h-40 w-full cursor-pointer rounded border border-zinc-700 object-contain transition hover:scale-105"
                     />
                   )}
                 </div>
@@ -406,6 +406,27 @@ cargo.includes("Gerente")
             )}
           </div>
         </section>
+      )}
+
+      {imagemAberta && (
+        <div
+          onClick={() => setImagemAberta(null)}
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 p-4"
+        >
+          <button
+            onClick={() => setImagemAberta(null)}
+            className="absolute right-6 top-6 rounded bg-red-700 px-4 py-2 text-xl font-black text-white hover:bg-red-600"
+          >
+            ✕
+          </button>
+
+          <img
+            src={imagemAberta}
+            alt="Print aberto"
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[90vh] max-w-[95vw] rounded-xl object-contain"
+          />
+        </div>
       )}
     </main>
   );
