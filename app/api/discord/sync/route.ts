@@ -16,35 +16,33 @@ function limparCargo(cargo: string) {
 }
 
 function descobrirCargo(cargos: string[]) {
-  const cargosLimpos = cargos.map(limparCargo);
-
-  const mapaCargos: Record<string, string> = {
-    "Líder": "Líder",
-    "Vice-Líder": "Vice-Líder",
-    "Gerente Geral": "Gerente Geral",
-    "Gerente": "Gerente Geral",
-    "Elite Alfa": "Elite",
-    "Membro": "Membro",
-    "Admin Farm": "Gerente de Farm",
-    "Gerente Farm": "Gerente de Farm",
-    "Gerente de Ação": "Gerente de Ações",
-  };
+  const cargosLimpos = cargos.map((cargo) =>
+    cargo
+      .replace(/[^\p{L}\p{N}\s-]/gu, "")
+      .trim()
+  );
 
   const prioridade = [
-    "Líder",
-    "Vice-Líder",
-    "Gerente Geral",
-    "Gerente",
-    "Admin Farm",
-    "Gerente Farm",
-    "Gerente de Ação",
-    "Elite Alfa",
-    "Membro",
+    { discord: "Líder", site: "Líder" },
+    { discord: "Vice-Líder", site: "Vice-Líder" },
+    { discord: "Gerente Geral", site: "Gerente Geral" },
+
+    { discord: "Gerente de Farm", site: "Gerente de Farm" },
+    { discord: "Gerente de Produção", site: "Gerente de Produção" },
+    { discord: "Gerente de Compras", site: "Gerente de Compras" },
+    { discord: "Gerente de Vendas", site: "Gerente de Vendas" },
+    { discord: "Gerente de Ação", site: "Gerente de Ações" },
+
+    { discord: "Admin Farm", site: "Admin Farm" },
+
+    { discord: "Elite Alfa", site: "Elite" },
+
+    { discord: "Membro", site: "Membro" },
   ];
 
-  for (const cargoDiscord of prioridade) {
-    if (cargosLimpos.includes(cargoDiscord)) {
-      return mapaCargos[cargoDiscord];
+  for (const cargo of prioridade) {
+    if (cargosLimpos.includes(cargo.discord)) {
+      return cargo.site;
     }
   }
 
