@@ -18,41 +18,9 @@ export default function FarmPage() {
   function converterPrint(arquivo: File) {
     const reader = new FileReader();
 
-    reader.onload = (evento) => {
-      const img = new Image();
-
-      img.onload = () => {
-        const canvas = document.createElement("canvas");
-
-        const MAX_WIDTH = 900;
-        const scale = Math.min(1, MAX_WIDTH / img.width);
-
-        canvas.width = img.width * scale;
-        canvas.height = img.height * scale;
-
-        const ctx = canvas.getContext("2d");
-
-        if (!ctx) {
-          alert("Erro ao carregar imagem.");
-          return;
-        }
-
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
-        const imagemComprimida = canvas.toDataURL("image/jpeg", 0.45);
-
-        setPrint(imagemComprimida);
-      };
-
-      img.onerror = () => {
-        alert("Erro ao converter imagem.");
-      };
-
-      img.src = evento.target?.result as string;
-    };
-
-    reader.onerror = () => {
-      alert("Erro ao carregar o print.");
+    reader.onloadend = () => {
+      const resultado = reader.result as string;
+      setPrint(resultado);
     };
 
     reader.readAsDataURL(arquivo);
@@ -188,11 +156,15 @@ export default function FarmPage() {
         </div>
 
         {print && (
-          <img
-            src={print}
-            alt="Print do farm"
-            className="mt-5 h-40 rounded border border-zinc-700"
-          />
+          <div className="mt-5 w-full max-w-xl rounded border border-zinc-700 bg-black p-2">
+            <p className="mb-2 text-sm text-zinc-400">Preview do print:</p>
+
+            <img
+              src={print}
+              alt="Print do farm"
+              className="max-h-80 w-full rounded object-contain"
+            />
+          </div>
         )}
 
         <button
