@@ -36,8 +36,9 @@ function descobrirCargo(cargos: string[]) {
     { discord: "Admin Farm", site: "Admin Farm" },
 
     { discord: "Elite Alfa", site: "Elite" },
+{ discord: "Elite", site: "Elite" },
 
-    { discord: "Membro", site: "Membro" },
+{ discord: "Membro", site: "Membro" },
   ];
 
   for (const cargo of prioridade) {
