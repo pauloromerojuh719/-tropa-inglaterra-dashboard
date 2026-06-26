@@ -13,6 +13,9 @@ import {
 import { db } from "../lib/firebase";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  nomeDiscord?: string;
   cargo: string;
   status: string;
 };
@@ -48,6 +51,7 @@ export default function AcoesPage() {
 
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [membroLogado, setMembroLogado] = useState<Membro | null>(null);
 
   const [tipo, setTipo] = useState("Joalheria");
   const [status, setStatus] = useState<"Sucesso" | "Falhou">("Sucesso");
@@ -57,6 +61,16 @@ export default function AcoesPage() {
   const [familiaRival, setFamiliaRival] = useState("");
 
   const [acoes, setAcoes] = useState<Acao[]>([]);
+
+  function nomeExibicao() {
+    return (
+      membroLogado?.nomeRP ||
+      membroLogado?.nomeDiscord ||
+      membroLogado?.nome ||
+      session?.user?.name ||
+      "Sem nome"
+    );
+  }
 
   function formatarDinheiro(valor: number) {
     return valor.toLocaleString("pt-BR", {
@@ -80,6 +94,28 @@ export default function AcoesPage() {
     inicio.setHours(0, 0, 0, 0);
 
     return inicio;
+  }
+
+  async function enviarLogAcao(dados: {
+    tipo: string;
+    status: string;
+    participantes: number;
+    valor: number;
+    responsavel: string;
+    familiaRival?: string;
+    observacao?: string;
+  }) {
+    try {
+      await fetch("/api/discord/log-acoes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dados),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar log de ação:", error);
+    }
   }
 
   async function carregarAcoes() {
@@ -112,15 +148,29 @@ export default function AcoesPage() {
       return;
     }
 
-    await addDoc(collection(db, "acoes"), {
+    const responsavel = nomeExibicao();
+
+    const dados = {
       tipo,
       status,
       participantes: Number(participantes),
       valor: Number(valor),
       observacao,
       familiaRival: tipo === "Desafio" ? familiaRival : "",
-      registradoPor: session.user.name || "Sem nome",
+      registradoPor: responsavel,
       criadoEm: Timestamp.now(),
+    };
+
+    await addDoc(collection(db, "acoes"), dados);
+
+    await enviarLogAcao({
+      tipo,
+      status,
+      participantes: Number(participantes),
+      valor: Number(valor),
+      responsavel,
+      familiaRival: tipo === "Desafio" ? familiaRival : "",
+      observacao,
     });
 
     setTipo("Joalheria");
@@ -152,19 +202,20 @@ export default function AcoesPage() {
       }
 
       const membro = membroSnap.data() as Membro;
+      setMembroLogado(membro);
 
       const cargo = membro.cargo?.trim() || "";
-const status = membro.status?.trim() || "";
+      const status = membro.status?.trim() || "";
 
-if (
-  status === "aprovado" &&
-  (cargo === "Líder" ||
-    cargo === "Vice-Líder" ||
-    cargo.includes("Gerente"))
-) {
-  setTemPermissao(true);
-  await carregarAcoes();
-}
+      if (
+        status === "aprovado" &&
+        (cargo === "Líder" ||
+          cargo === "Vice-Líder" ||
+          cargo.includes("Gerente"))
+      ) {
+        setTemPermissao(true);
+        await carregarAcoes();
+      }
 
       setCarregando(false);
     }

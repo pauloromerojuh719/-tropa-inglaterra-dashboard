@@ -14,6 +14,9 @@ import {
 import { db } from "../lib/firebase";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  nomeDiscord?: string;
   cargo: string;
   status: string;
 };
@@ -38,6 +41,7 @@ export default function ReembolsoPage() {
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
   const [podePagar, setPodePagar] = useState(false);
+  const [membroLogado, setMembroLogado] = useState<Membro | null>(null);
 
   const [passaporte, setPassaporte] = useState("");
   const [nome, setNome] = useState("");
@@ -47,6 +51,16 @@ export default function ReembolsoPage() {
   const [foto, setFoto] = useState("");
 
   const [reembolsos, setReembolsos] = useState<Reembolso[]>([]);
+
+  function nomeExibicao() {
+    return (
+      membroLogado?.nomeRP ||
+      membroLogado?.nomeDiscord ||
+      membroLogado?.nome ||
+      session?.user?.name ||
+      "Sem nome"
+    );
+  }
 
   function formatarDinheiro(valor: number) {
     return valor.toLocaleString("pt-BR", {
@@ -68,6 +82,30 @@ export default function ReembolsoPage() {
     };
 
     reader.readAsDataURL(arquivo);
+  }
+
+  async function enviarLogReembolso(tipo: string, dados: {
+    passaporte: string;
+    nome: string;
+    item: string;
+    quantidade: number;
+    valor: number;
+    responsavel: string;
+  }) {
+    try {
+      await fetch("/api/discord/log-reembolsos", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tipo,
+          ...dados,
+        }),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar log de reembolso:", error);
+    }
   }
 
   async function carregarReembolsos() {
@@ -95,6 +133,15 @@ export default function ReembolsoPage() {
       return;
     }
 
+    const dadosLog = {
+      passaporte,
+      nome,
+      item,
+      quantidade: Number(quantidade),
+      valor: Number(valor),
+      responsavel: nomeExibicao(),
+    };
+
     await addDoc(collection(db, "reembolsos"), {
       passaporte,
       nome,
@@ -102,10 +149,12 @@ export default function ReembolsoPage() {
       quantidade: Number(quantidade),
       valor: Number(valor),
       foto,
-      solicitadoPor: session.user.name || "Sem nome",
+      solicitadoPor: nomeExibicao(),
       status: "pendente",
       criadoEm: Timestamp.now(),
     });
+
+    await enviarLogReembolso("solicitado", dadosLog);
 
     setPassaporte("");
     setNome("");
@@ -119,10 +168,19 @@ export default function ReembolsoPage() {
     alert("Reembolso solicitado!");
   }
 
-  async function marcarComoPago(id: string) {
-    await updateDoc(doc(db, "reembolsos", id), {
+  async function marcarComoPago(reembolso: Reembolso) {
+    await updateDoc(doc(db, "reembolsos", reembolso.id), {
       status: "pago",
       pagoEm: Timestamp.now(),
+    });
+
+    await enviarLogReembolso("pago", {
+      passaporte: reembolso.passaporte,
+      nome: reembolso.nome,
+      item: reembolso.item,
+      quantidade: reembolso.quantidade,
+      valor: reembolso.valor,
+      responsavel: nomeExibicao(),
     });
 
     await carregarReembolsos();
@@ -153,18 +211,20 @@ export default function ReembolsoPage() {
       }
 
       const membro = membroSnap.data() as Membro;
-      const cargo = membro.cargo?.trim();
-      const status = membro.status?.trim();
+      setMembroLogado(membro);
+
+      const cargo = membro.cargo?.trim() || "";
+      const status = membro.status?.trim() || "";
 
       const cargosLiberados =
-  cargo === "Líder" ||
-  cargo === "Vice-Líder" ||
-  cargo.includes("Gerente");
+        cargo === "Líder" ||
+        cargo === "Vice-Líder" ||
+        cargo.includes("Gerente");
 
-const cargosQuePodemPagar =
-  cargo === "Líder" ||
-  cargo === "Vice-Líder" ||
-  cargo.includes("Gerente");
+      const cargosQuePodemPagar =
+        cargo === "Líder" ||
+        cargo === "Vice-Líder" ||
+        cargo.includes("Gerente");
 
       if (status === "aprovado" && cargosLiberados) {
         setTemPermissao(true);
@@ -297,6 +357,18 @@ const cargosQuePodemPagar =
           />
         </div>
 
+        {foto && (
+          <div className="mt-5 w-full max-w-xl rounded border border-zinc-700 bg-black p-2">
+            <p className="mb-2 text-sm text-zinc-400">Preview da foto:</p>
+
+            <img
+              src={foto}
+              alt="Preview do reembolso"
+              className="max-h-80 w-full rounded object-contain"
+            />
+          </div>
+        )}
+
         <button
           onClick={solicitarReembolso}
           className="mt-6 rounded bg-red-700 px-6 py-3 font-bold"
@@ -316,7 +388,10 @@ const cargosQuePodemPagar =
           )}
 
           {reembolsosPendentes.map((r) => (
-            <div key={r.id} className="rounded-xl border border-zinc-800 bg-black p-5">
+            <div
+              key={r.id}
+              className="rounded-xl border border-zinc-800 bg-black p-5"
+            >
               <h3 className="text-xl font-bold">
                 {r.nome} - Passaporte {r.passaporte}
               </h3>
@@ -338,7 +413,7 @@ const cargosQuePodemPagar =
 
               {podePagar && (
                 <button
-                  onClick={() => marcarComoPago(r.id)}
+                  onClick={() => marcarComoPago(r)}
                   className="mt-4 rounded bg-green-700 px-4 py-2 font-bold"
                 >
                   Marcar como Pago
@@ -360,7 +435,10 @@ const cargosQuePodemPagar =
           )}
 
           {reembolsosPagos.map((r) => (
-            <div key={r.id} className="rounded-xl border border-zinc-800 bg-black p-5">
+            <div
+              key={r.id}
+              className="rounded-xl border border-zinc-800 bg-black p-5"
+            >
               <h3 className="text-xl font-bold">
                 {r.nome} - Passaporte {r.passaporte}
               </h3>

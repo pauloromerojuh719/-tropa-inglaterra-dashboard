@@ -65,6 +65,46 @@ export default function AdminPage() {
     );
   }
 
+  async function enviarLogFarm(tipo: string, farm: Farm) {
+    try {
+      await fetch("/api/discord/log-farm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo,
+          nome: farm.membroNome || "Sem nome",
+          folhas: farm.folhas,
+          opios: farm.opios,
+          seringas: farm.seringas,
+          agulhas: farm.agulhas,
+          aprovadoPor: session?.user?.name || "Gerência",
+        }),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar log de farm:", error);
+    }
+  }
+
+  async function enviarLogCadastro(tipo: string, membro: Membro, cargo?: string) {
+    try {
+      await fetch("/api/discord/log-cadastro", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo,
+          nome: membro.nome,
+          nomeRP: membro.nomeRP || membro.nome,
+          passaporte: membro.passaporte || "Não informado",
+          email: membro.email || "Sem email",
+          cargo: cargo || membro.cargo || "Membro",
+          aprovadoPor: session?.user?.name || "Gerência",
+        }),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar log de cadastro:", error);
+    }
+  }
+
   useEffect(() => {
     async function verificarPermissao() {
       if (!session?.user) {
@@ -164,7 +204,6 @@ export default function AdminPage() {
 
   async function apagarAviso() {
     const confirmar = confirm("Deseja apagar o aviso principal?");
-
     if (!confirmar) return;
 
     await deleteDoc(doc(db, "avisos", "principal"));
@@ -192,24 +231,30 @@ export default function AdminPage() {
       ...(item.data() as Omit<Membro, "id">),
     }));
 
-    setMembros(
-      lista.filter((membro) => membro.status?.trim() === "pendente")
-    );
-  } async function aprovarMembro(id: string, cargo: string) {
-    await updateDoc(doc(db, "membros", id), {
+    setMembros(lista.filter((membro) => membro.status?.trim() === "pendente"));
+  }
+
+  async function aprovarMembro(membro: Membro, cargo: string) {
+    const cargoFinal = cargo || "Membro";
+
+    await updateDoc(doc(db, "membros", membro.id), {
       status: "aprovado",
-      cargo: cargo || "Membro",
+      cargo: cargoFinal,
     });
+
+    await enviarLogCadastro("aprovado", membro, cargoFinal);
 
     alert("Membro aprovado!");
     carregarMembros();
   }
 
-  async function reprovarMembro(id: string) {
-    await updateDoc(doc(db, "membros", id), {
+  async function reprovarMembro(membro: Membro) {
+    await updateDoc(doc(db, "membros", membro.id), {
       status: "reprovado",
       cargo: "Nenhum",
     });
+
+    await enviarLogCadastro("reprovado", membro, "Nenhum");
 
     alert("Membro reprovado!");
     carregarMembros();
@@ -228,14 +273,18 @@ export default function AdminPage() {
       status: "aprovado",
     });
 
+    await enviarLogFarm("aprovado", farm);
+
     alert("Farm aprovado!");
     carregarFarms();
   }
 
-  async function reprovarFarm(id: string) {
-    await updateDoc(doc(db, "farm", id), {
+  async function reprovarFarm(farm: Farm) {
+    await updateDoc(doc(db, "farm", farm.id), {
       status: "reprovado",
     });
+
+    await enviarLogFarm("reprovado", farm);
 
     alert("Farm reprovado!");
     carregarFarms();
@@ -353,7 +402,8 @@ export default function AdminPage() {
           🗑️ Apagar Aviso
         </button>
       </section>
-<section className="mb-10 rounded-xl border border-red-900 bg-zinc-950 p-6">
+
+      <section className="mb-10 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="mb-5 text-3xl font-bold">👥 Membros Pendentes</h2>
 
         {membros.length === 0 && (
@@ -403,7 +453,7 @@ export default function AdminPage() {
                 <button
                   onClick={() =>
                     aprovarMembro(
-                      membro.id,
+                      membro,
                       membro.cargo === "Nenhum" ? "Membro" : membro.cargo
                     )
                   }
@@ -413,7 +463,7 @@ export default function AdminPage() {
                 </button>
 
                 <button
-                  onClick={() => reprovarMembro(membro.id)}
+                  onClick={() => reprovarMembro(membro)}
                   className="rounded bg-red-700 px-5 py-3 font-bold hover:bg-red-600"
                 >
                   Reprovar
@@ -466,7 +516,7 @@ export default function AdminPage() {
                 </button>
 
                 <button
-                  onClick={() => reprovarFarm(farm.id)}
+                  onClick={() => reprovarFarm(farm)}
                   className="rounded bg-red-700 px-5 py-3 font-bold hover:bg-red-600"
                 >
                   Reprovar Farm

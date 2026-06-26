@@ -14,6 +14,9 @@ import { db } from "../lib/firebase";
 import jsPDF from "jspdf";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  nomeDiscord?: string;
   cargo: string;
   status: string;
 };
@@ -32,11 +35,33 @@ export default function ProducaoPage() {
 
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [membroLogado, setMembroLogado] = useState<Membro | null>(null);
 
   const [item, setItem] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [print, setPrint] = useState("");
   const [producoes, setProducoes] = useState<Producao[]>([]);
+
+  function nomeExibicao() {
+    return (
+      membroLogado?.nomeRP ||
+      membroLogado?.nomeDiscord ||
+      membroLogado?.nome ||
+      session?.user?.name ||
+      "Sem nome"
+    );
+  }
+
+  function converterPrint(arquivo: File) {
+    const reader = new FileReader();
+
+    reader.onloadend = () => {
+      const resultado = reader.result as string;
+      setPrint(resultado);
+    };
+
+    reader.readAsDataURL(arquivo);
+  }
 
   function formatarData(data: any) {
     if (!data?.toDate) return "Sem data";
@@ -62,8 +87,7 @@ export default function ProducaoPage() {
 
     return inicio;
   }
-
-  function fimDaSemana() {
+    function fimDaSemana() {
     const inicio = inicioDaSemana();
     const fim = new Date(inicio);
     fim.setDate(inicio.getDate() + 6);
@@ -75,6 +99,24 @@ export default function ProducaoPage() {
   function inicioDoMes() {
     const hoje = new Date();
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  }
+
+  async function enviarLogProducao(dados: {
+    item: string;
+    quantidade: number;
+    responsavel: string;
+  }) {
+    try {
+      await fetch("/api/discord/log-producao", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dados),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar log de produção:", error);
+    }
   }
 
   async function carregarProducoes() {
@@ -98,17 +140,26 @@ export default function ProducaoPage() {
     if (!session?.user) return;
 
     if (!item || !quantidade || !print) {
-      alert("Preencha item, quantidade e o link do print.");
+      alert("Preencha item, quantidade e envie o print.");
       return;
     }
 
-    await addDoc(collection(db, "producoes"), {
+    const responsavel = nomeExibicao();
+    const quantidadeNumero = Number(quantidade);
+
+    const dados = {
       item,
-      quantidade: Number(quantidade),
-      responsavel: session.user.name || "Sem nome",
+      quantidade: quantidadeNumero,
+      responsavel,
+    };
+
+    await addDoc(collection(db, "producoes"), {
+      ...dados,
       print,
       criadoEm: Timestamp.now(),
     });
+
+    await enviarLogProducao(dados);
 
     setItem("");
     setQuantidade("");
@@ -117,8 +168,7 @@ export default function ProducaoPage() {
     await carregarProducoes();
     alert("Produção registrada!");
   }
-
-  useEffect(() => {
+    useEffect(() => {
     async function verificarPermissao() {
       if (!session?.user) {
         setCarregando(false);
@@ -140,15 +190,17 @@ export default function ProducaoPage() {
       }
 
       const membro = membroSnap.data() as Membro;
+      setMembroLogado(membro);
+
       const cargo = membro.cargo?.trim();
       const status = membro.status?.trim();
 
       if (
-  status === "aprovado" &&
-  (cargo === "Líder" ||
-    cargo === "Vice-Líder" ||
-    cargo.includes("Gerente"))
-) {
+        status === "aprovado" &&
+        (cargo === "Líder" ||
+          cargo === "Vice-Líder" ||
+          cargo?.includes("Gerente"))
+      ) {
         setTemPermissao(true);
         await carregarProducoes();
       } else {
@@ -228,9 +280,7 @@ ${
     });
 
     pdf.save("relatorio-semanal-producao-inglaterra.pdf");
-  }
-
-  if (carregando) {
+  }  if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
@@ -261,7 +311,7 @@ ${
         <div className="rounded-xl border border-red-900 bg-zinc-950 p-8 text-center">
           <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
           <p className="mt-4 text-zinc-400">
-           Apenas Líder, Vice-Líder ou Gerentes podem acessar esta área.
+            Apenas Líder, Vice-Líder ou Gerentes podem acessar esta área.
           </p>
         </div>
       </main>
@@ -327,12 +377,30 @@ ${
           />
 
           <input
-            value={print}
-            onChange={(e) => setPrint(e.target.value)}
-            placeholder="Link do print obrigatório"
+            type="file"
+            accept="image/*"
             className="rounded bg-black p-4 text-white"
+            onChange={(e) => {
+              const arquivo = e.target.files?.[0];
+
+              if (arquivo) {
+                converterPrint(arquivo);
+              }
+            }}
           />
         </div>
+
+        {print && (
+          <div className="mt-5 w-full max-w-xl rounded border border-zinc-700 bg-black p-2">
+            <p className="mb-2 text-sm text-zinc-400">Preview do print:</p>
+
+            <img
+              src={print}
+              alt="Print da produção"
+              className="max-h-80 w-full rounded object-contain"
+            />
+          </div>
+        )}
 
         <button
           onClick={salvarProducao}
@@ -370,7 +438,7 @@ ${
                       <img
                         src={producao.print}
                         alt="Print da produção"
-                        className="mt-3 h-40 rounded border border-zinc-700"
+                        className="mt-3 h-40 rounded border border-zinc-700 object-contain"
                       />
                     )}
                   </div>

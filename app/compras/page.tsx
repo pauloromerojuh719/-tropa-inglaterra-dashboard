@@ -15,6 +15,9 @@ import {
 import { db } from "../lib/firebase";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  nomeDiscord?: string;
   cargo: string;
   status: string;
 };
@@ -42,6 +45,7 @@ export default function ComprasPage() {
 
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [membroLogado, setMembroLogado] = useState<Membro | null>(null);
 
   const [item, setItem] = useState("");
   const [quantidade, setQuantidade] = useState("");
@@ -52,6 +56,16 @@ export default function ComprasPage() {
   const [saldoAdicionar, setSaldoAdicionar] = useState("");
   const [saldoRetirar, setSaldoRetirar] = useState("");
   const [historicoCaixa, setHistoricoCaixa] = useState<MovimentoCaixa[]>([]);
+
+  function nomeExibicao() {
+    return (
+      membroLogado?.nomeRP ||
+      membroLogado?.nomeDiscord ||
+      membroLogado?.nome ||
+      session?.user?.name ||
+      "Sem nome"
+    );
+  }
 
   function formatarDinheiro(valor: number) {
     return valor.toLocaleString("pt-BR", {
@@ -80,6 +94,25 @@ export default function ComprasPage() {
   function inicioDoMes() {
     const hoje = new Date();
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  }
+
+  async function enviarLogCompra(dados: {
+    item: string;
+    quantidade: number;
+    valor: number;
+    comprador: string;
+  }) {
+    try {
+      await fetch("/api/discord/log-compras", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dados),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar log de compra:", error);
+    }
   }
 
   async function carregarCompras() {
@@ -114,7 +147,9 @@ export default function ComprasPage() {
     });
 
     setHistoricoCaixa(lista);
-  }  function limparFormulario() {
+  }
+
+  function limparFormulario() {
     setItem("");
     setQuantidade("");
     setValor("");
@@ -133,7 +168,7 @@ export default function ComprasPage() {
       tipo: "entrada",
       valor: Number(saldoAdicionar),
       descricao: "Saldo adicionado",
-      responsavel: session.user.name || "Sem nome",
+      responsavel: nomeExibicao(),
       criadoEm: Timestamp.now(),
     });
 
@@ -155,7 +190,7 @@ export default function ComprasPage() {
       tipo: "saida",
       valor: Number(saldoRetirar),
       descricao: "Saldo retirado manualmente",
-      responsavel: session.user.name || "Sem nome",
+      responsavel: nomeExibicao(),
       criadoEm: Timestamp.now(),
     });
 
@@ -173,13 +208,14 @@ export default function ComprasPage() {
       return;
     }
 
+    const comprador = nomeExibicao();
     const novoValor = Number(valor);
 
     const dados = {
       item,
       quantidade: Number(quantidade),
       valor: novoValor,
-      comprador: session.user.name || "Sem nome",
+      comprador,
     };
 
     if (editandoId) {
@@ -199,7 +235,7 @@ export default function ComprasPage() {
           tipo: "saida",
           valor: diferenca,
           descricao: `Ajuste compra: ${item}`,
-          responsavel: session.user.name || "Sem nome",
+          responsavel: comprador,
           criadoEm: Timestamp.now(),
         });
       }
@@ -209,7 +245,7 @@ export default function ComprasPage() {
           tipo: "entrada",
           valor: Math.abs(diferenca),
           descricao: `Estorno ajuste compra: ${item}`,
-          responsavel: session.user.name || "Sem nome",
+          responsavel: comprador,
           criadoEm: Timestamp.now(),
         });
       }
@@ -231,9 +267,11 @@ export default function ComprasPage() {
       tipo: "saida",
       valor: novoValor,
       descricao: `Compra: ${item}`,
-      responsavel: session.user.name || "Sem nome",
+      responsavel: comprador,
       criadoEm: Timestamp.now(),
     });
+
+    await enviarLogCompra(dados);
 
     limparFormulario();
 
@@ -241,7 +279,9 @@ export default function ComprasPage() {
     await carregarCaixa();
 
     alert("Compra registrada e descontada do caixa!");
-  }  function editarCompra(compra: Compra) {
+  }
+
+  function editarCompra(compra: Compra) {
     setEditandoId(compra.id);
     setItem(compra.item);
     setQuantidade(String(compra.quantidade));
@@ -265,7 +305,7 @@ export default function ComprasPage() {
       tipo: "entrada",
       valor: compra.valor,
       descricao: `Estorno da compra: ${compra.item}`,
-      responsavel: session.user.name || "Sem nome",
+      responsavel: nomeExibicao(),
       criadoEm: Timestamp.now(),
     });
 
@@ -298,6 +338,8 @@ export default function ComprasPage() {
       }
 
       const membro = membroSnap.data() as Membro;
+      setMembroLogado(membro);
+
       const cargo = membro.cargo?.trim() || "";
       const status = membro.status?.trim() || "";
 
@@ -339,16 +381,17 @@ export default function ComprasPage() {
     })
     .reduce((total, compra) => total + (compra.valor || 0), 0);
 
-const totalEntradasCaixa = historicoCaixa
-  .filter((mov) => mov.tipo === "entrada")
-  .reduce((total, mov) => total + (mov.valor || 0), 0);
+  const totalEntradasCaixa = historicoCaixa
+    .filter((mov) => mov.tipo === "entrada")
+    .reduce((total, mov) => total + (mov.valor || 0), 0);
 
-const totalSaidasCaixa = historicoCaixa
-  .filter((mov) => mov.tipo === "saida")
-  .reduce((total, mov) => total + (mov.valor || 0), 0);
+  const totalSaidasCaixa = historicoCaixa
+    .filter((mov) => mov.tipo === "saida")
+    .reduce((total, mov) => total + (mov.valor || 0), 0);
 
-const saldoCaixa = totalEntradasCaixa - totalSaidasCaixa;
-    if (carregando) {
+  const saldoCaixa = totalEntradasCaixa - totalSaidasCaixa;
+
+  if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
         <h1 className="text-4xl font-black text-red-600">Carregando...</h1>
@@ -432,9 +475,9 @@ const saldoCaixa = totalEntradasCaixa - totalSaidasCaixa;
           <div className="rounded-xl border border-zinc-800 bg-black p-5">
             <p className="text-zinc-400">Saldo Disponível</p>
 
-<h3 className="mt-2 text-3xl font-black">
-  {formatarDinheiro(saldoCaixa)}
-</h3>
+            <h3 className="mt-2 text-3xl font-black">
+              {formatarDinheiro(saldoCaixa)}
+            </h3>
           </div>
 
           <div className="rounded-xl border border-zinc-800 bg-black p-5">

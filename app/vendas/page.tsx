@@ -13,6 +13,9 @@ import {
 import { db } from "../lib/firebase";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  nomeDiscord?: string;
   cargo: string;
   status: string;
 };
@@ -33,6 +36,7 @@ export default function VendasPage() {
 
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [membroLogado, setMembroLogado] = useState<Membro | null>(null);
 
   const [tipo, setTipo] = useState<"Família" | "Membro">("Família");
   const [comprador, setComprador] = useState("");
@@ -40,6 +44,16 @@ export default function VendasPage() {
   const [quantidade, setQuantidade] = useState("");
   const [valor, setValor] = useState("");
   const [vendas, setVendas] = useState<Venda[]>([]);
+
+  function nomeExibicao() {
+    return (
+      membroLogado?.nomeRP ||
+      membroLogado?.nomeDiscord ||
+      membroLogado?.nome ||
+      session?.user?.name ||
+      "Sem nome"
+    );
+  }
 
   function formatarDinheiro(valor: number) {
     return valor.toLocaleString("pt-BR", {
@@ -70,6 +84,27 @@ export default function VendasPage() {
     return new Date(hoje.getFullYear(), hoje.getMonth(), 1);
   }
 
+  async function enviarLogVenda(dados: {
+    tipoVenda: string;
+    comprador: string;
+    item: string;
+    quantidade: number;
+    valor: number;
+    vendedor: string;
+  }) {
+    try {
+      await fetch("/api/discord/log-vendas", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(dados),
+      });
+    } catch (error) {
+      console.error("Erro ao enviar log de venda:", error);
+    }
+  }
+
   async function carregarVendas() {
     const snapshot = await getDocs(collection(db, "vendas"));
 
@@ -95,14 +130,29 @@ export default function VendasPage() {
       return;
     }
 
-    await addDoc(collection(db, "vendas"), {
+    const vendedor = nomeExibicao();
+
+    const dados = {
       tipo,
       comprador,
       item,
       quantidade: Number(quantidade),
       valor: Number(valor),
-      vendedor: session.user.name || "Sem nome",
+      vendedor,
+    };
+
+    await addDoc(collection(db, "vendas"), {
+      ...dados,
       criadoEm: Timestamp.now(),
+    });
+
+    await enviarLogVenda({
+      tipoVenda: tipo,
+      comprador,
+      item,
+      quantidade: Number(quantidade),
+      valor: Number(valor),
+      vendedor,
     });
 
     setTipo("Família");
@@ -133,18 +183,19 @@ export default function VendasPage() {
       }
 
       const membro = membroSnap.data() as Membro;
+      setMembroLogado(membro);
 
       const cargo = membro.cargo?.trim() || "";
 
-if (
-  membro.status === "aprovado" &&
-  (cargo === "Líder" ||
-    cargo === "Vice-Líder" ||
-    cargo.includes("Gerente"))
-) {
-  setTemPermissao(true);
-  await carregarVendas();
-}
+      if (
+        membro.status === "aprovado" &&
+        (cargo === "Líder" ||
+          cargo === "Vice-Líder" ||
+          cargo.includes("Gerente"))
+      ) {
+        setTemPermissao(true);
+        await carregarVendas();
+      }
 
       setCarregando(false);
     }
@@ -252,9 +303,7 @@ if (
 
           <input
             placeholder={
-              tipo === "Família"
-                ? "Nome da família"
-                : "Nome do membro"
+              tipo === "Família" ? "Nome da família" : "Nome do membro"
             }
             value={comprador}
             onChange={(e) => setComprador(e.target.value)}

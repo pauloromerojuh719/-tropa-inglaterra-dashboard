@@ -84,7 +84,7 @@ export default function FarmPage() {
         session.user.name || "Sem nome"
       );
 
-      await addDoc(collection(db, "farm"), {
+      const dadosFarm = {
         membroNome: nomeParaSalvar,
         membroEmail: session.user.email || "",
         membroId: discordId,
@@ -96,6 +96,25 @@ export default function FarmPage() {
         print,
         status: "pendente",
         criadoEm: Timestamp.now(),
+      };
+
+      await addDoc(collection(db, "farm"), dadosFarm);
+
+      await fetch("/api/discord/log-farm", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          nome: nomeParaSalvar,
+          nomeRP: membroCadastro?.nomeRP || nomeParaSalvar,
+          nomeDiscord: membroCadastro?.nomeDiscord || session.user.name || "",
+          email: session.user.email || "",
+          folhas: Number(folhas || 0),
+          opios: Number(opios || 0),
+          seringas: Number(seringas || 0),
+          agulhas: Number(agulhas || 0),
+        }),
       });
 
       setFolhas("");

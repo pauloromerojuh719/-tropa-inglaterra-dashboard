@@ -18,19 +18,15 @@ function descobrirCargo(cargos: string[]) {
     { discord: "Líder", site: "Líder" },
     { discord: "Vice-Líder", site: "Vice-Líder" },
     { discord: "Gerente Geral", site: "Gerente Geral" },
-
     { discord: "Gerente de Farm", site: "Gerente de Farm" },
     { discord: "Gerente de Produção", site: "Gerente de Produção" },
     { discord: "Gerente de Compras", site: "Gerente de Compras" },
     { discord: "Gerente de Vendas", site: "Gerente de Vendas" },
     { discord: "Gerente de Ação", site: "Gerente de Ações" },
     { discord: "Gerente de Ações", site: "Gerente de Ações" },
-
     { discord: "Admin Farm", site: "Admin Farm" },
-
     { discord: "Elite Alfa", site: "Elite" },
     { discord: "Elite", site: "Elite" },
-
     { discord: "Membro", site: "Membro" },
   ];
 
@@ -41,6 +37,90 @@ function descobrirCargo(cargos: string[]) {
   }
 
   return "Membro";
+}
+
+function pesoCargo(cargo: string) {
+  const pesos: Record<string, number> = {
+    Removido: 0,
+    Nenhum: 1,
+    Membro: 2,
+    Elite: 3,
+    "Admin Farm": 4,
+    "Gerente de Farm": 5,
+    "Gerente de Produção": 5,
+    "Gerente de Compras": 5,
+    "Gerente de Vendas": 5,
+    "Gerente de Ações": 5,
+    "Gerente Geral": 6,
+    "Vice-Líder": 7,
+    Líder: 8,
+  };
+
+  return pesos[cargo] || 2;
+}
+
+async function enviarLogCargo({
+  nome,
+  cargoAntigo,
+  cargoNovo,
+}: {
+  nome: string;
+  cargoAntigo: string;
+  cargoNovo: string;
+}) {
+  try {
+    if (!process.env.DISCORD_LOG_CARGOS_CHANNEL_ID) return;
+
+    const pesoAntigo = pesoCargo(cargoAntigo);
+    const pesoNovo = pesoCargo(cargoNovo);
+
+    const tipo =
+      pesoNovo > pesoAntigo
+        ? "promocao"
+        : pesoNovo < pesoAntigo
+        ? "rebaixamento"
+        : "alteracao";
+
+    await fetch(`${process.env.NEXTAUTH_URL}/api/discord/log-cargos`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tipo,
+        nome,
+        cargoAntigo,
+        cargoNovo,
+      }),
+    });
+  } catch (error) {
+    console.error("Erro ao enviar log de cargo:", error);
+  }
+}
+
+async function enviarLogExpulsao({
+  nome,
+  cargoAntigo,
+}: {
+  nome: string;
+  cargoAntigo: string;
+}) {
+  try {
+    if (!process.env.DISCORD_LOG_EXPULSOES_CHANNEL_ID) return;
+
+    await fetch(`${process.env.NEXTAUTH_URL}/api/discord/log-expulsoes`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        nome,
+        cargoAntigo,
+      }),
+    });
+  } catch (error) {
+    console.error("Erro ao enviar log de expulsão:", error);
+  }
 }
 
 export async function GET() {
@@ -67,6 +147,7 @@ export async function GET() {
     const membrosSnap = await getDocs(collection(db, "membros"));
 
     const cadastrados = new Map<string, string>();
+    const dadosCadastrados = new Map<string, any>();
     const discordIdsNoServidor = new Set<string>();
 
     membrosSnap.forEach((docItem) => {
@@ -74,12 +155,14 @@ export async function GET() {
 
       if (data.discordId) {
         cadastrados.set(data.discordId, docItem.id);
+        dadosCadastrados.set(data.discordId, data);
       }
     });
 
     const pendentes: any[] = [];
     let atualizados = 0;
     let removidos = 0;
+    let cargosAlterados = 0;
 
     for (const [, member] of discordMembers) {
       if (member.user.bot) continue;
@@ -105,9 +188,35 @@ export async function GET() {
       };
 
       const membroDocId = cadastrados.get(member.id);
+      const dadosAntigos = dadosCadastrados.get(member.id);
 
       if (membroDocId) {
-        await updateDoc(doc(db, "membros", membroDocId), dadosDiscord);
+        const cargoAntigo = dadosAntigos?.cargo || "Nenhum";
+
+        if (cargoAntigo !== cargoDetectado && cargoAntigo !== "Removido") {
+          cargosAlterados++;
+
+          await enviarLogCargo({
+            nome:
+              dadosAntigos?.nomeRP ||
+              dadosAntigos?.nomeDiscord ||
+              dadosAntigos?.nome ||
+              member.displayName ||
+              member.user.username ||
+              "Sem nome",
+            cargoAntigo,
+            cargoNovo: cargoDetectado,
+          });
+        }
+
+        await updateDoc(doc(db, "membros", membroDocId), {
+          ...dadosDiscord,
+          status:
+            dadosAntigos?.status === "removido"
+              ? "aprovado"
+              : dadosAntigos?.status || "aprovado",
+        });
+
         atualizados++;
       } else {
         pendentes.push(dadosDiscord);
@@ -121,6 +230,19 @@ export async function GET() {
 
     for (const [discordId, membroDocId] of cadastrados.entries()) {
       if (!discordIdsNoServidor.has(discordId)) {
+        const dadosAntigos = dadosCadastrados.get(discordId);
+
+        if (dadosAntigos?.status !== "removido") {
+          await enviarLogExpulsao({
+            nome:
+              dadosAntigos?.nomeRP ||
+              dadosAntigos?.nomeDiscord ||
+              dadosAntigos?.nome ||
+              "Sem nome",
+            cargoAntigo: dadosAntigos?.cargo || "Membro",
+          });
+        }
+
         await updateDoc(doc(db, "membros", membroDocId), {
           status: "removido",
           cargo: "Removido",
@@ -141,6 +263,7 @@ export async function GET() {
       totalAtualizados: atualizados,
       totalPendentes: pendentes.length,
       totalRemovidos: removidos,
+      totalCargosAlterados: cargosAlterados,
       pendentes,
     });
   } catch (error) {
