@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
 import { Client, GatewayIntentBits, TextChannel } from "discord.js";
+export async function GET() {
+  return NextResponse.json({
+    rota: "log-reembolsos ativa",
+    metodo: "GET teste",
+  });
+}
 
 export async function POST(request: Request) {
   try {
