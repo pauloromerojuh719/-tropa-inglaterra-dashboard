@@ -9,17 +9,9 @@ import {
 } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 
-function limparCargo(cargo: string) {
-  return cargo
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .trim();
-}
-
 function descobrirCargo(cargos: string[]) {
   const cargosLimpos = cargos.map((cargo) =>
-    cargo
-      .replace(/[^\p{L}\p{N}\s-]/gu, "")
-      .trim()
+    cargo.replace(/[^\p{L}\p{N}\s-]/gu, "").trim()
   );
 
   const prioridade = [
@@ -32,13 +24,14 @@ function descobrirCargo(cargos: string[]) {
     { discord: "Gerente de Compras", site: "Gerente de Compras" },
     { discord: "Gerente de Vendas", site: "Gerente de Vendas" },
     { discord: "Gerente de Ação", site: "Gerente de Ações" },
+    { discord: "Gerente de Ações", site: "Gerente de Ações" },
 
     { discord: "Admin Farm", site: "Admin Farm" },
 
     { discord: "Elite Alfa", site: "Elite" },
-{ discord: "Elite", site: "Elite" },
+    { discord: "Elite", site: "Elite" },
 
-{ discord: "Membro", site: "Membro" },
+    { discord: "Membro", site: "Membro" },
   ];
 
   for (const cargo of prioridade) {
@@ -74,6 +67,7 @@ export async function GET() {
     const membrosSnap = await getDocs(collection(db, "membros"));
 
     const cadastrados = new Map<string, string>();
+    const discordIdsNoServidor = new Set<string>();
 
     membrosSnap.forEach((docItem) => {
       const data = docItem.data();
@@ -85,9 +79,12 @@ export async function GET() {
 
     const pendentes: any[] = [];
     let atualizados = 0;
+    let removidos = 0;
 
     for (const [, member] of discordMembers) {
       if (member.user.bot) continue;
+
+      discordIdsNoServidor.add(member.id);
 
       const cargosDiscord = member.roles.cache
         .filter((role) => role.name !== "@everyone")
@@ -103,6 +100,7 @@ export async function GET() {
         cargosDiscord,
         cargo: cargoDetectado,
         entrouServidorEm: member.joinedAt,
+        removidoEm: null,
         atualizadoEm: new Date(),
       };
 
@@ -121,6 +119,19 @@ export async function GET() {
       }
     }
 
+    for (const [discordId, membroDocId] of cadastrados.entries()) {
+      if (!discordIdsNoServidor.has(discordId)) {
+        await updateDoc(doc(db, "membros", membroDocId), {
+          status: "removido",
+          cargo: "Removido",
+          removidoEm: new Date(),
+          atualizadoEm: new Date(),
+        });
+
+        removidos++;
+      }
+    }
+
     await client.destroy();
 
     return NextResponse.json({
@@ -129,6 +140,7 @@ export async function GET() {
       totalCadastrados: cadastrados.size,
       totalAtualizados: atualizados,
       totalPendentes: pendentes.length,
+      totalRemovidos: removidos,
       pendentes,
     });
   } catch (error) {

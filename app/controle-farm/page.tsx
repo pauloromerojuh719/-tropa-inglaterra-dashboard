@@ -6,6 +6,12 @@ import { collection, doc, getDoc, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  nomeDiscord?: string;
+  username?: string;
+  email?: string;
+  discordId?: string;
   cargo: string;
   status: string;
 };
@@ -34,6 +40,19 @@ type ResumoMembro = {
   agulhas: number;
   total: number;
 };
+
+function nomeExibicao(membro?: Membro) {
+  if (!membro) return "Sem nome";
+
+  return (
+    membro.nomeRP ||
+    membro.nomeDiscord ||
+    membro.nome ||
+    membro.username ||
+    membro.email ||
+    "Sem nome"
+  );
+}
 
 export default function ControleFarmPage() {
   const { data: session } = useSession();
@@ -84,6 +103,9 @@ export default function ControleFarmPage() {
       status === "aprovado" &&
       (cargo === "Líder" ||
         cargo === "Vice-Líder" ||
+        cargo === "Gerente Geral" ||
+        cargo === "Gerente de Farm" ||
+        cargo === "Gerente de Produção" ||
         cargo?.includes("Gerente"))
     ) {
       setTemPermissao(true);
@@ -96,12 +118,28 @@ export default function ControleFarmPage() {
   }
 
   async function carregarControleFarm() {
-    const snapshot = await getDocs(collection(db, "farm"));
+    const farmSnap = await getDocs(collection(db, "farm"));
+    const membrosSnap = await getDocs(collection(db, "membros"));
+
+    const membrosPorId: Record<string, Membro> = {};
+    const membrosPorEmail: Record<string, Membro> = {};
+
+    membrosSnap.docs.forEach((item) => {
+      const dados = item.data() as Membro;
+
+      if (dados.discordId) {
+        membrosPorId[dados.discordId] = dados;
+      }
+
+      if (dados.email) {
+        membrosPorEmail[dados.email] = dados;
+      }
+    });
 
     const mapa: Record<string, ResumoMembro> = {};
     const listaFarms: Farm[] = [];
 
-    snapshot.docs.forEach((docItem) => {
+    farmSnap.docs.forEach((docItem) => {
       const farm = {
         id: docItem.id,
         ...(docItem.data() as Omit<Farm, "id">),
@@ -109,15 +147,27 @@ export default function ControleFarmPage() {
 
       if (farm.status !== "aprovado") return;
 
-      listaFarms.push(farm);
+      const membroDoCadastro =
+        membrosPorId[farm.membroId] || membrosPorEmail[farm.membroEmail];
+
+      const nomeCorreto = membroDoCadastro
+        ? nomeExibicao(membroDoCadastro)
+        : farm.membroNome || "Sem nome";
+
+      const farmCorrigido = {
+        ...farm,
+        membroNome: nomeCorreto,
+      };
+
+      listaFarms.push(farmCorrigido);
 
       const chave = farm.membroId || farm.membroEmail || farm.membroNome;
 
       if (!mapa[chave]) {
         mapa[chave] = {
-          membroNome: farm.membroNome || "Sem nome",
-          membroEmail: farm.membroEmail || "",
-          membroId: farm.membroId || "",
+          membroNome: nomeCorreto,
+          membroEmail: farm.membroEmail || membroDoCadastro?.email || "",
+          membroId: farm.membroId || membroDoCadastro?.discordId || "",
           folhas: 0,
           opios: 0,
           seringas: 0,
@@ -126,6 +176,7 @@ export default function ControleFarmPage() {
         };
       }
 
+      mapa[chave].membroNome = nomeCorreto;
       mapa[chave].folhas += Number(farm.folhas || 0);
       mapa[chave].opios += Number(farm.opios || 0);
       mapa[chave].seringas += Number(farm.seringas || 0);

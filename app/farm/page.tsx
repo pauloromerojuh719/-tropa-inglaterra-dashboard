@@ -2,8 +2,30 @@
 
 import { useState } from "react";
 import { useSession, signIn } from "next-auth/react";
-import { addDoc, collection, Timestamp } from "firebase/firestore";
+import { addDoc, collection, doc, getDoc, Timestamp } from "firebase/firestore";
 import { db } from "../lib/firebase";
+
+type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  nomeDiscord?: string;
+  username?: string;
+  email?: string;
+  discordId?: string;
+};
+
+function nomeExibicao(membro: Membro | null, sessionName?: string | null) {
+  if (!membro) return sessionName || "Sem nome";
+
+  return (
+    membro.nomeRP ||
+    membro.nomeDiscord ||
+    membro.nome ||
+    membro.username ||
+    sessionName ||
+    "Sem nome"
+  );
+}
 
 export default function FarmPage() {
   const { data: session, status } = useSession();
@@ -47,8 +69,23 @@ export default function FarmPage() {
 
       const discordId = (session.user as any).id || "";
 
+      let membroCadastro: Membro | null = null;
+
+      if (discordId) {
+        const membroSnap = await getDoc(doc(db, "membros", discordId));
+
+        if (membroSnap.exists()) {
+          membroCadastro = membroSnap.data() as Membro;
+        }
+      }
+
+      const nomeParaSalvar = nomeExibicao(
+        membroCadastro,
+        session.user.name || "Sem nome"
+      );
+
       await addDoc(collection(db, "farm"), {
-        membroNome: session.user.name || "Sem nome",
+        membroNome: nomeParaSalvar,
         membroEmail: session.user.email || "",
         membroId: discordId,
         discordId: discordId,

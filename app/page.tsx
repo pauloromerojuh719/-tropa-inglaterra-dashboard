@@ -22,6 +22,8 @@ type Membro = {
   nome: string;
   email: string;
   discordId: string;
+  nomeDiscord?: string;
+  username?: string;
   nomeRP?: string;
   passaporte?: string;
   numeroBau?: string;
@@ -57,6 +59,18 @@ type Plantao = {
   status: "aberto" | "fechado";
 };
 
+function nomeExibicao(membro: Membro | null) {
+  if (!membro) return "Sem nome";
+
+  return (
+    membro.nomeRP ||
+    membro.nomeDiscord ||
+    membro.nome ||
+    membro.username ||
+    "Sem nome"
+  );
+}
+
 export default function Home() {
   const { data: session } = useSession();
 
@@ -80,9 +94,7 @@ export default function Home() {
 
   const cargoLimpo = membro?.cargo?.trim();
 
-  const isElite =
-    cargoLimpo === "Elite" ||
-    cargoLimpo === "Gerente de Ações";
+  const isElite = cargoLimpo === "Elite" || cargoLimpo === "Gerente de Ações";
 
   const podeVerAdmin =
     cargoLimpo === "Líder" ||
@@ -117,18 +129,19 @@ export default function Home() {
     seringasMeta >= 800 &&
     agulhasMeta >= 800;
 
-  const statusMeta =
-    isElite
-      ? "ISENTO"
-      : metaCompleta
-      ? "META BATIDA"
-      : "EM ANDAMENTO";
+  const statusMeta = isElite
+    ? "ISENTO"
+    : metaCompleta
+    ? "META BATIDA"
+    : "EM ANDAMENTO";
 
   function formatarMinutos(minutos: number) {
     const horas = Math.floor(minutos / 60);
     const mins = minutos % 60;
     return `${horas}h ${mins}m`;
-  }  async function buscarPendenciasGerencia() {
+  }
+
+  async function buscarPendenciasGerencia() {
     const membrosSnap = await getDocs(collection(db, "membros"));
     const farmSnap = await getDocs(collection(db, "farm"));
     const reembolsoSnap = await getDocs(collection(db, "reembolsos"));
@@ -179,7 +192,7 @@ export default function Home() {
   }
 
   async function iniciarPlantao() {
-    if (!session?.user) return;
+    if (!session?.user || !membro) return;
 
     if (plantaoAberto) {
       alert("Você já está com entrada aberta.");
@@ -187,7 +200,7 @@ export default function Home() {
     }
 
     await addDoc(collection(db, "plantoes"), {
-      nome: session.user.name || "Sem nome",
+      nome: nomeExibicao(membro),
       email: session.user.email || "",
       inicio: Timestamp.now(),
       status: "aberto",
@@ -207,16 +220,14 @@ export default function Home() {
     const inicioMillis = plantaoAberto.inicio.toDate().getTime();
     const fimMillis = agora.toDate().getTime();
 
-    const minutos = Math.max(
-      1,
-      Math.floor((fimMillis - inicioMillis) / 60000)
-    );
+    const minutos = Math.max(1, Math.floor((fimMillis - inicioMillis) / 60000));
 
     await updateDoc(doc(db, "plantoes", plantaoAberto.id), {
       fim: agora,
       minutos,
       status: "fechado",
     });
+
     await buscarPlantoes();
   }
 
@@ -233,6 +244,8 @@ export default function Home() {
       if (!membroSnap.exists()) {
         const novoMembro: Membro = {
           nome: session.user.name || "Sem nome",
+          nomeDiscord: session.user.name || "Sem nome",
+          username: session.user.name || "Sem nome",
           email: session.user.email || "",
           discordId,
           nomeRP: "",
@@ -317,6 +330,8 @@ export default function Home() {
 
     const membroAtualizado: Membro = {
       nome: session.user.name || "Sem nome",
+      nomeDiscord: session.user.name || "Sem nome",
+      username: session.user.name || "Sem nome",
       email: session.user.email || "",
       discordId,
       nomeRP,
@@ -385,7 +400,10 @@ export default function Home() {
           </h1>
 
           <p className="mt-4 text-center text-zinc-400">
-            Discord: <strong>{membro.nome}</strong>
+            Discord:{" "}
+            <strong>
+              {membro.nomeDiscord || membro.nome || membro.username || "Sem nome"}
+            </strong>
           </p>
 
           <input
@@ -425,7 +443,9 @@ export default function Home() {
         </div>
       </main>
     );
-  }  if (membro.status === "pendente") {
+  }
+
+  if (membro.status === "pendente") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8 text-center">
@@ -516,22 +536,21 @@ export default function Home() {
                   </Link>
 
                   <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  🛒 COMPRAS
-</Link>
+                    🛒 COMPRAS
+                  </Link>
 
-<Link href="/contatos" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  📞 CONTATOS
-</Link>
+                  <Link href="/contatos" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    📞 CONTATOS
+                  </Link>
 
-<Link href="/programacao-semanal" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  📅 PROGRAMAÇÃO
-</Link>
+                  <Link href="/programacao-semanal" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    📅 PROGRAMAÇÃO
+                  </Link>
 
-<Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-  💰 VENDAS
-</Link>
+                  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    💰 VENDAS
+                  </Link>
 
-                 
                   <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                     🏭 PRODUÇÃO
                   </Link>
@@ -559,7 +578,6 @@ export default function Home() {
                   <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                     📊 RELATÓRIO
                   </Link>
-                  
 
                   <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
                     ⚙️ ADMIN
@@ -583,7 +601,7 @@ export default function Home() {
                   <p className="font-black text-red-500">BEM-VINDO(A)!</p>
 
                   <h3 className="mt-2 text-3xl font-black">
-                    {membro.nomeRP || membro.nome}
+                    {nomeExibicao(membro)}
                   </h3>
 
                   <p className="mt-2 text-zinc-400">
