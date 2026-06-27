@@ -23,12 +23,26 @@ function diasDesde(data: Date | null) {
   return Math.floor(diff / (1000 * 60 * 60 * 24));
 }
 
-function estrelas(pontos: number) {
-  if (pontos >= 90) return "⭐⭐⭐⭐⭐";
-  if (pontos >= 70) return "⭐⭐⭐⭐";
-  if (pontos >= 45) return "⭐⭐⭐";
-  if (pontos >= 20) return "⭐⭐";
-  return "⭐";
+function statusFarm(totalEntregas: number, diasSemFarm: number) {
+  if (totalEntregas === 0) return "🚨 Nunca entregou";
+
+  if (diasSemFarm <= 7 && totalEntregas >= 4) {
+    return "🔥 Entrega sempre";
+  }
+
+  if (diasSemFarm <= 7) {
+    return "✅ Entregou recentemente";
+  }
+
+  if (diasSemFarm <= 14) {
+    return "🟡 Faz mais de 7 dias que não entrega";
+  }
+
+  if (diasSemFarm <= 30) {
+    return "⚠️ Faz mais de 14 dias que não entrega";
+  }
+
+  return "🚨 Faz mais de 30 dias que não entrega";
 }
 
 export async function GET() {
@@ -62,10 +76,14 @@ export async function GET() {
 
       const canalTexto = canal as TextChannel;
 
+      const nomeCanal = canalTexto.name.toLowerCase();
+
       if (
-        canalTexto.name.includes("instru") ||
-        canalTexto.name.includes("planilha") ||
-        canalTexto.name.includes("como")
+        nomeCanal.includes("instru") ||
+        nomeCanal.includes("planilha") ||
+        nomeCanal.includes("como") ||
+        nomeCanal.includes("aviso") ||
+        nomeCanal.includes("modelo")
       ) {
         continue;
       }
@@ -92,115 +110,205 @@ export async function GET() {
         (mensagem) => !mensagem.author.bot
       );
 
-      const prints = mensagensMembro.filter(
+      const entregasComPrint = mensagensMembro.filter(
         (mensagem) => mensagem.attachments.size > 0
       );
 
-      const ordenadas = mensagensMembro.sort(
+      const entregasOrdenadas = entregasComPrint.sort(
         (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
       );
 
-      const ultimaEntrega = ordenadas[0]?.createdAt || null;
+      const ultimaEntrega = entregasOrdenadas[0]?.createdAt || null;
+
+      const primeiraEntrega =
+        entregasOrdenadas[entregasOrdenadas.length - 1]?.createdAt || null;
+
       const diasSemFarm = diasDesde(ultimaEntrega);
 
-      let pontos = 0;
-
-      pontos += prints.length * 3;
-      pontos += mensagensMembro.length;
-
-      if (diasSemFarm <= 7) pontos += 30;
-      else if (diasSemFarm <= 14) pontos += 10;
-      else if (diasSemFarm <= 30) pontos -= 20;
-      else pontos -= 50;
-
-      if (pontos < 0) pontos = 0;
-      if (pontos > 100) pontos = 100;
-
-      let status = "🚨 Possível demissão";
-
-      if (pontos >= 90) status = "🔥 Exemplar";
-      else if (pontos >= 70) status = "✅ Muito ativo";
-      else if (pontos >= 45) status = "🟡 Regular";
-      else if (pontos >= 20) status = "⚠️ Pouco ativo";
+      const totalEntregas = entregasComPrint.length;
 
       membros.push({
         nome: canalTexto.name,
+        totalEntregas,
         mensagens: mensagensMembro.length,
-        prints: prints.length,
+        primeiraEntrega: formatarData(primeiraEntrega),
         ultimaEntrega: formatarData(ultimaEntrega),
         diasSemFarm,
-        pontos,
-        estrelas: estrelas(pontos),
-        status,
+        status: statusFarm(totalEntregas, diasSemFarm),
       });
     }
 
     await client.destroy();
 
-    const ranking = [...membros].sort((a, b) => b.pontos - a.pontos);
-    const demissao = membros.filter((m) => m.pontos < 20);
-    const poucoAtivos = membros.filter((m) => m.pontos >= 20 && m.pontos < 45);
-    const exemplares = membros.filter((m) => m.pontos >= 90);
+    const ranking = [...membros].sort(
+      (a, b) => b.totalEntregas - a.totalEntregas
+    );
+
+    const entregaSempre = membros.filter(
+      (m) => m.totalEntregas > 0 && m.diasSemFarm <= 7 && m.totalEntregas >= 4
+    );
+
+    const entregouRecentemente = membros.filter(
+      (m) => m.totalEntregas > 0 && m.diasSemFarm <= 7 && m.totalEntregas < 4
+    );
+
+    const maisDe7Dias = membros.filter(
+      (m) => m.totalEntregas > 0 && m.diasSemFarm > 7 && m.diasSemFarm <= 14
+    );
+
+    const maisDe14Dias = membros.filter(
+      (m) => m.totalEntregas > 0 && m.diasSemFarm > 14 && m.diasSemFarm <= 30
+    );
+
+    const maisDe30Dias = membros.filter(
+      (m) => m.totalEntregas > 0 && m.diasSemFarm > 30
+    );
+
+    const nuncaEntregou = membros.filter((m) => m.totalEntregas === 0);
+
+    const totalFarms = membros.reduce(
+      (total, membro) => total + membro.totalEntregas,
+      0
+    );
+
+    const mediaFarm =
+      membros.length > 0 ? (totalFarms / membros.length).toFixed(1) : "0";
 
     let texto = "";
 
     texto += "═══════════════════════════════════════\n";
-    texto += "📊 RELATÓRIO DE ATIVIDADE DA FACÇÃO\n";
-    texto += "Período: Desde o início do Discord\n";
+    texto += "📊 LEVANTAMENTO DE FARM — DISCORD\n";
+    texto += "Período: Desde o início dos canais\n";
     texto += `Total de membros analisados: ${membros.length}\n`;
+    texto += `Total de farms com print encontrados: ${totalFarms}\n`;
+    texto += `Média de farms por membro: ${mediaFarm}\n`;
     texto += "═══════════════════════════════════════\n\n";
 
-    texto += "🏆 TOP 10 MAIS ATIVOS\n\n";
+    texto += "📌 RESUMO GERAL\n\n";
+    texto += `🔥 Entregam sempre: ${entregaSempre.length}\n`;
+    texto += `✅ Entregaram recentemente: ${entregouRecentemente.length}\n`;
+    texto += `🟡 Mais de 7 dias sem entregar: ${maisDe7Dias.length}\n`;
+    texto += `⚠️ Mais de 14 dias sem entregar: ${maisDe14Dias.length}\n`;
+    texto += `🚨 Mais de 30 dias sem entregar: ${maisDe30Dias.length}\n`;
+    texto += `❌ Nunca entregaram: ${nuncaEntregou.length}\n\n`;
+
+    texto += "═══════════════════════════════════════\n\n";
+
+    texto += "🏆 TOP 10 QUE MAIS ENTREGARAM FARM\n\n";
+
     ranking.slice(0, 10).forEach((m, index) => {
-      texto += `${index + 1}º ${m.nome} — ${m.pontos} pts ${m.estrelas}\n`;
-      texto += `   Prints: ${m.prints} | Msgs: ${m.mensagens} | Último: ${m.ultimaEntrega}\n\n`;
+      texto += `${index + 1}º ${m.nome}\n`;
+      texto += `• Total de farms: ${m.totalEntregas}\n`;
+      texto += `• Primeira entrega: ${m.primeiraEntrega}\n`;
+      texto += `• Última entrega: ${m.ultimaEntrega}\n`;
+      texto += `• Dias sem farm: ${
+        m.diasSemFarm === 9999 ? "Nunca entregou" : m.diasSemFarm
+      }\n`;
+      texto += `• Status: ${m.status}\n\n`;
     });
 
     texto += "═══════════════════════════════════════\n\n";
 
-    texto += "🚨 POSSÍVEIS DEMISSÕES\n\n";
-    if (demissao.length === 0) {
+    texto += "🔥 MEMBROS QUE ENTREGAM SEMPRE\n\n";
+
+    if (entregaSempre.length === 0) {
       texto += "Nenhum membro nessa categoria.\n\n";
     } else {
-      demissao.forEach((m) => {
+      entregaSempre
+        .sort((a, b) => b.totalEntregas - a.totalEntregas)
+        .forEach((m) => {
+          texto += `${m.nome} — ${m.totalEntregas} farms — Último: ${m.ultimaEntrega}\n`;
+        });
+      texto += "\n";
+    }
+
+    texto += "═══════════════════════════════════════\n\n";
+
+    texto += "✅ ENTREGARAM RECENTEMENTE\n\n";
+
+    if (entregouRecentemente.length === 0) {
+      texto += "Nenhum membro nessa categoria.\n\n";
+    } else {
+      entregouRecentemente
+        .sort((a, b) => b.totalEntregas - a.totalEntregas)
+        .forEach((m) => {
+          texto += `${m.nome} — ${m.totalEntregas} farms — Último: ${m.ultimaEntrega}\n`;
+        });
+      texto += "\n";
+    }
+
+    texto += "═══════════════════════════════════════\n\n";
+
+    texto += "🟡 MAIS DE 7 DIAS SEM ENTREGAR\n\n";
+
+    if (maisDe7Dias.length === 0) {
+      texto += "Nenhum membro nessa categoria.\n\n";
+    } else {
+      maisDe7Dias
+        .sort((a, b) => b.diasSemFarm - a.diasSemFarm)
+        .forEach((m) => {
+          texto += `${m.nome} — ${m.diasSemFarm} dias sem farm — Total: ${m.totalEntregas}\n`;
+        });
+      texto += "\n";
+    }
+
+    texto += "═══════════════════════════════════════\n\n";
+
+    texto += "⚠️ MAIS DE 14 DIAS SEM ENTREGAR\n\n";
+
+    if (maisDe14Dias.length === 0) {
+      texto += "Nenhum membro nessa categoria.\n\n";
+    } else {
+      maisDe14Dias
+        .sort((a, b) => b.diasSemFarm - a.diasSemFarm)
+        .forEach((m) => {
+          texto += `${m.nome} — ${m.diasSemFarm} dias sem farm — Último: ${m.ultimaEntrega}\n`;
+        });
+      texto += "\n";
+    }
+
+    texto += "═══════════════════════════════════════\n\n";
+
+    texto += "🚨 MAIS DE 30 DIAS SEM ENTREGAR\n\n";
+
+    if (maisDe30Dias.length === 0) {
+      texto += "Nenhum membro nessa categoria.\n\n";
+    } else {
+      maisDe30Dias
+        .sort((a, b) => b.diasSemFarm - a.diasSemFarm)
+        .forEach((m) => {
+          texto += `${m.nome} — ${m.diasSemFarm} dias sem farm — Último: ${m.ultimaEntrega}\n`;
+        });
+      texto += "\n";
+    }
+
+    texto += "═══════════════════════════════════════\n\n";
+
+    texto += "❌ NUNCA ENTREGARAM FARM\n\n";
+
+    if (nuncaEntregou.length === 0) {
+      texto += "Todos os membros já entregaram pelo menos uma vez.\n\n";
+    } else {
+      nuncaEntregou.forEach((m) => {
         texto += `${m.nome}\n`;
-        texto += `• ${m.pontos} pts ${m.estrelas}\n`;
-        texto += `• Prints: ${m.prints}\n`;
-        texto += `• Mensagens: ${m.mensagens}\n`;
-        texto += `• Último farm: ${m.ultimaEntrega}\n\n`;
-      });
-    }
-
-    texto += "═══════════════════════════════════════\n\n";
-
-    texto += "⚠️ POUCO ATIVOS\n\n";
-    if (poucoAtivos.length === 0) {
-      texto += "Nenhum membro nessa categoria.\n\n";
-    } else {
-      poucoAtivos.forEach((m) => {
-        texto += `${m.nome} — ${m.pontos} pts ${m.estrelas} — Último: ${m.ultimaEntrega}\n`;
       });
       texto += "\n";
     }
 
     texto += "═══════════════════════════════════════\n\n";
 
-    texto += "🔥 MEMBROS EXEMPLARES\n\n";
-    if (exemplares.length === 0) {
-      texto += "Nenhum membro nessa categoria.\n\n";
-    } else {
-      exemplares.forEach((m) => {
-        texto += `${m.nome} — ${m.pontos} pts ${m.estrelas}\n`;
-      });
-      texto += "\n";
-    }
+    texto += "📋 LISTA COMPLETA POR MEMBRO\n\n";
 
-    texto += "═══════════════════════════════════════\n\n";
-
-    texto += "📋 LISTA COMPLETA\n\n";
     ranking.forEach((m) => {
-      texto += `${m.nome} — ${m.status} — ${m.pontos} pts ${m.estrelas}\n`;
-      texto += `Prints: ${m.prints} | Mensagens: ${m.mensagens} | Dias sem farm: ${m.diasSemFarm}\n\n`;
+      texto += `${m.nome}\n`;
+      texto += `• Status: ${m.status}\n`;
+      texto += `• Total de farms: ${m.totalEntregas}\n`;
+      texto += `• Primeira entrega: ${m.primeiraEntrega}\n`;
+      texto += `• Última entrega: ${m.ultimaEntrega}\n`;
+      texto += `• Dias sem farm: ${
+        m.diasSemFarm === 9999 ? "Nunca entregou" : m.diasSemFarm
+      }\n`;
+      texto += `• Mensagens no canal: ${m.mensagens}\n\n`;
     });
 
     return new Response(texto, {
