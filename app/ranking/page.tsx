@@ -13,11 +13,21 @@ type Plantao = {
   status: string;
 };
 
+type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  email?: string;
+};
+
 type Ranking = {
   nome: string;
   email: string;
   minutos: number;
 };
+
+function nomeExibicao(membro?: Membro, nomeAntigo?: string) {
+  return membro?.nomeRP || membro?.nome || nomeAntigo || "Sem nome";
+}
 
 export default function RankingPage() {
   const [rankingGeral, setRankingGeral] = useState<Ranking[]>([]);
@@ -33,7 +43,6 @@ export default function RankingPage() {
   function inicioDaSemana() {
     const hoje = new Date();
     const dia = hoje.getDay();
-
     const diferenca = dia === 0 ? -6 : 1 - dia;
 
     const segunda = new Date(hoje);
@@ -45,8 +54,8 @@ export default function RankingPage() {
 
   function fimDaSemana() {
     const segunda = inicioDaSemana();
-
     const domingo = new Date(segunda);
+
     domingo.setDate(segunda.getDate() + 6);
     domingo.setHours(23, 59, 59, 999);
 
@@ -67,23 +76,40 @@ export default function RankingPage() {
     return null;
   }
 
-  function somarNoMapa(mapa: Record<string, Ranking>, plantao: Plantao) {
+  function somarNoMapa(
+    mapa: Record<string, Ranking>,
+    plantao: Plantao,
+    membrosPorEmail: Record<string, Membro>
+  ) {
     const email = plantao.email || "sem-email";
+    const membroCadastro = membrosPorEmail[email];
 
     if (!mapa[email]) {
       mapa[email] = {
-        nome: plantao.nome || "Sem nome",
+        nome: nomeExibicao(membroCadastro, plantao.nome),
         email,
         minutos: 0,
       };
     }
 
+    mapa[email].nome = nomeExibicao(membroCadastro, plantao.nome);
     mapa[email].minutos += plantao.minutos || 0;
   }
 
   useEffect(() => {
     async function carregarRanking() {
-      const snapshot = await getDocs(collection(db, "plantoes"));
+      const plantoesSnap = await getDocs(collection(db, "plantoes"));
+      const membrosSnap = await getDocs(collection(db, "membros"));
+
+      const membrosPorEmail: Record<string, Membro> = {};
+
+      membrosSnap.docs.forEach((item) => {
+        const membro = item.data() as Membro;
+
+        if (membro.email) {
+          membrosPorEmail[membro.email] = membro;
+        }
+      });
 
       const mapaGeral: Record<string, Ranking> = {};
       const mapaSemanal: Record<string, Ranking> = {};
@@ -91,30 +117,28 @@ export default function RankingPage() {
       const segunda = inicioDaSemana();
       const domingo = fimDaSemana();
 
-      snapshot.docs.forEach((item) => {
+      plantoesSnap.docs.forEach((item) => {
         const plantao = item.data() as Plantao;
 
         if (plantao.status !== "fechado") return;
 
-        somarNoMapa(mapaGeral, plantao);
+        somarNoMapa(mapaGeral, plantao, membrosPorEmail);
 
         const dataInicio = converterData(plantao.inicio);
 
         if (dataInicio && dataInicio >= segunda && dataInicio <= domingo) {
-          somarNoMapa(mapaSemanal, plantao);
+          somarNoMapa(mapaSemanal, plantao, membrosPorEmail);
         }
       });
 
-      const listaGeral = Object.values(mapaGeral).sort(
-        (a, b) => b.minutos - a.minutos
+      setRankingGeral(
+        Object.values(mapaGeral).sort((a, b) => b.minutos - a.minutos)
       );
 
-      const listaSemanal = Object.values(mapaSemanal).sort(
-        (a, b) => b.minutos - a.minutos
+      setRankingSemanal(
+        Object.values(mapaSemanal).sort((a, b) => b.minutos - a.minutos)
       );
 
-      setRankingGeral(listaGeral);
-      setRankingSemanal(listaSemanal);
       setCarregando(false);
     }
 
@@ -176,13 +200,10 @@ export default function RankingPage() {
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="mb-8 text-5xl font-black text-red-600">
-        🏆 RANKING
-      </h1>
+      <h1 className="mb-8 text-5xl font-black text-red-600">🏆 RANKING</h1>
 
       <div className="grid gap-8">
         <CardRanking titulo="📅 Ranking Semanal" ranking={rankingSemanal} />
-
         <CardRanking titulo="⏱️ Ranking Geral" ranking={rankingGeral} />
       </div>
     </main>
