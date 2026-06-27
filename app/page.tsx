@@ -554,9 +554,7 @@ export default function Home() {
               )}
             </div>
 
-            {(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente de Farm") && (
+           {podeVerAdmin && (
               <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
                 <h2 className="mb-4 text-2xl font-black text-red-500">
                   ⚠️ PENDÊNCIAS DA GERÊNCIA
@@ -576,25 +574,32 @@ export default function Home() {
                   </Link>
                 </div>
 
-                <div className="mt-5 rounded-xl border border-yellow-700 bg-zinc-950 p-5 text-center">
-                  <h3 className="text-xl font-black text-yellow-400">
-                    📩 ALERTAS INDIVIDUAIS
-                  </h3>
+                {(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente de Farm") && (
+  <div className="mt-5 rounded-xl border border-yellow-700 bg-zinc-950 p-5 text-center">
+    <h3 className="text-xl font-black text-yellow-400">
+      📩 ALERTAS INDIVIDUAIS
+    </h3>
 
-                  <p className="mt-2 text-sm text-zinc-400">
-                    Envia DM para quem não bateu meta, quem não se cadastrou e parabéns para quem bateu.
-                  </p>
+    <p className="mt-2 text-sm text-zinc-400">
+      Envia DM para quem não bateu meta, quem não se cadastrou e parabéns para quem bateu.
+    </p>
 
-                  <button
-                    onClick={enviarAlertasIndividuais}
-                    disabled={enviandoAlertas}
-                    className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
-                  >
-                    {enviandoAlertas ? "Enviando alertas..." : "📩 Enviar Alertas Individuais"}
-                  </button>
-                </div>
-              </section>
-            )}
+    <button
+      onClick={enviarAlertasIndividuais}
+      disabled={enviandoAlertas}
+      className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
+    >
+      {enviandoAlertas
+        ? "Enviando alertas..."
+        : "📩 Enviar Alertas Individuais"}
+    </button>
+  </div>
+)}
+
+</section>
+)}
 
             {!isElite && (
               <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
