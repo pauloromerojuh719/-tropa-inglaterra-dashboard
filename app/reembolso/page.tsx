@@ -85,29 +85,30 @@ export default function ReembolsoPage() {
   }
 
   async function enviarLogReembolso(tipo: string, dados: {
-    passaporte: string;
-    nome: string;
-    item: string;
-    quantidade: number;
-    valor: number;
-    responsavel: string;
-  }) {
-    try {
-      await fetch("/api/discord/log-reembolsos", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          tipo,
-          ...dados,
-        }),
-      });
-    } catch (error) {
-      console.error("Erro ao enviar log de reembolso:", error);
-    }
-  }
+  passaporte: string;
+  nome: string;
+  item: string;
+  quantidade: number;
+  valor: number;
+  responsavel: string;
+}) {
+  try {
+    const resposta = await fetch("/api/discord/log-reembolsos", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        tipo,
+        ...dados,
+      }),
+    });
 
+    console.log(await resposta.text());
+  } catch (error) {
+    console.error("Erro ao enviar log de reembolso:", error);
+  }
+}
   async function carregarReembolsos() {
     const snapshot = await getDocs(collection(db, "reembolsos"));
 
