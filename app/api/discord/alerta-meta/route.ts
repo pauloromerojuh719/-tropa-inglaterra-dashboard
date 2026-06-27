@@ -9,8 +9,36 @@ const META_SERINGAS = 800;
 const META_AGULHAS = 800;
 const TOTAL_META = META_FOLHAS + META_OPIOS + META_SERINGAS + META_AGULHAS;
 
+function dataBrasilAgora() {
+  return new Date().toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function dataBrasilSomenteData(data: Date) {
+  return data.toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
+function hojeBrasil() {
+  return new Date(
+    new Date().toLocaleString("en-US", {
+      timeZone: "America/Sao_Paulo",
+    })
+  );
+}
+
 function inicioDaSemana() {
-  const hoje = new Date();
+  const hoje = hojeBrasil();
   const dia = hoje.getDay();
   const diferenca = dia === 0 ? 6 : dia - 1;
 
@@ -30,9 +58,22 @@ function fimDaSemana() {
   return fim;
 }
 
+function converterDataFirebase(data: any) {
+  if (!data) return null;
+
+  if (data?.toDate) {
+    return data.toDate();
+  }
+
+  return new Date(data);
+}
+
 function dentroDaSemana(data: any) {
-  const d = data?.toDate?.();
-  return d && d >= inicioDaSemana() && d <= fimDaSemana();
+  const d = converterDataFirebase(data);
+
+  if (!d) return false;
+
+  return d >= inicioDaSemana() && d <= fimDaSemana();
 }
 
 function isentoMeta(cargo?: string) {
@@ -171,7 +212,8 @@ export async function GET() {
                     `Olá, **${nome}**.\n\n` +
                     `Sua meta semanal está em **${porcentagem}%**.\n` +
                     `A semana encerra no domingo.\n\n` +
-                    `Regularize sua entrega antes do fechamento da semana.`,
+                    `Regularize sua entrega antes do fechamento da semana.\n\n` +
+                    `📅 Enviado em: ${dataBrasilAgora()}`,
                   fields: [
                     {
                       name: "🍃 Folhas",
@@ -222,14 +264,18 @@ export async function GET() {
       }
     }
 
+    const inicioSemana = inicioDaSemana();
+    const fimSemana = fimDaSemana();
+
     await canal.send({
       embeds: [
         {
           color: 0xf1c40f,
           title: "⚠️ Alerta de Meta Semanal - Inglaterra",
-          description: `Semana: ${inicioDaSemana().toLocaleDateString(
-            "pt-BR"
-          )} até ${fimDaSemana().toLocaleDateString("pt-BR")}`,
+          description: `Semana: ${dataBrasilSomenteData(
+            inicioSemana
+          )} até ${dataBrasilSomenteData(fimSemana)}
+Gerado em: ${dataBrasilAgora()}`,
           fields: [
             {
               name: "❌ Longe da meta",
@@ -280,7 +326,6 @@ export async function GET() {
           footer: {
             text: "Painel Inglaterra",
           },
-          timestamp: new Date().toISOString(),
         },
       ],
     });
