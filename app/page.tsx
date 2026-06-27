@@ -554,7 +554,9 @@ export default function Home() {
               )}
             </div>
 
-            {podeVerAdmin && (
+            {(cargoLimpo === "Líder" ||
+  cargoLimpo === "Vice-Líder" ||
+  cargoLimpo === "Gerente de Farm") && (
               <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
                 <h2 className="mb-4 text-2xl font-black text-red-500">
                   ⚠️ PENDÊNCIAS DA GERÊNCIA
