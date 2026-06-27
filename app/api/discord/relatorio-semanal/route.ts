@@ -8,13 +8,38 @@ const META_OPIOS = 2000;
 const META_SERINGAS = 800;
 const META_AGULHAS = 800;
 
+function dataBrasilAgora() {
+  return new Date().toLocaleString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function dataBrasilSomenteData(data: Date) {
+  return data.toLocaleDateString("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  });
+}
+
 function inicioDaSemana() {
-  const hoje = new Date();
-  const dia = hoje.getDay();
+  const agoraBrasil = new Date(
+    new Date().toLocaleString("en-US", {
+      timeZone: "America/Sao_Paulo",
+    })
+  );
+
+  const dia = agoraBrasil.getDay();
   const diferenca = dia === 0 ? 6 : dia - 1;
 
-  const inicio = new Date(hoje);
-  inicio.setDate(hoje.getDate() - diferenca);
+  const inicio = new Date(agoraBrasil);
+  inicio.setDate(agoraBrasil.getDate() - diferenca);
   inicio.setHours(0, 0, 0, 0);
 
   return inicio;
@@ -23,15 +48,29 @@ function inicioDaSemana() {
 function fimDaSemana() {
   const inicio = inicioDaSemana();
   const fim = new Date(inicio);
+
   fim.setDate(inicio.getDate() + 6);
   fim.setHours(23, 59, 59, 999);
 
   return fim;
 }
 
+function converterDataFirebase(data: any) {
+  if (!data) return null;
+
+  if (data?.toDate) {
+    return data.toDate();
+  }
+
+  return new Date(data);
+}
+
 function dentroDaSemana(data: any) {
-  const d = data?.toDate?.();
-  return d && d >= inicioDaSemana() && d <= fimDaSemana();
+  const d = converterDataFirebase(data);
+
+  if (!d) return false;
+
+  return d >= inicioDaSemana() && d <= fimDaSemana();
 }
 
 function dinheiro(valor: number) {
@@ -89,13 +128,12 @@ export async function GET() {
         seringas: number;
         agulhas: number;
       }
-    > = {};
-
-    farmSnap.docs.forEach((doc) => {
+    > = {};    farmSnap.docs.forEach((doc) => {
       const f = doc.data();
 
       if (f.status === "aprovado" && dentroDaSemana(f.criadoEm)) {
-        const membroId = f.membroId || f.discordId || f.membroEmail || f.membroNome;
+        const membroId =
+          f.membroId || f.discordId || f.membroEmail || f.membroNome;
 
         if (!metasPorMembro[membroId]) {
           metasPorMembro[membroId] = {
@@ -121,6 +159,7 @@ export async function GET() {
 
     vendasSnap.docs.forEach((doc) => {
       const v = doc.data();
+
       if (dentroDaSemana(v.criadoEm)) {
         totalVendas += Number(v.valor || 0);
       }
@@ -128,6 +167,7 @@ export async function GET() {
 
     comprasSnap.docs.forEach((doc) => {
       const c = doc.data();
+
       if (dentroDaSemana(c.criadoEm)) {
         totalCompras += Number(c.valor || 0);
       }
@@ -135,6 +175,7 @@ export async function GET() {
 
     producoesSnap.docs.forEach((doc) => {
       const p = doc.data();
+
       if (dentroDaSemana(p.criadoEm)) {
         totalProduzido += Number(p.quantidade || 0);
       }
@@ -142,6 +183,7 @@ export async function GET() {
 
     reembolsosSnap.docs.forEach((doc) => {
       const r = doc.data();
+
       if (r.status === "pago" && dentroDaSemana(r.pagoEm || r.criadoEm)) {
         totalReembolsosPagos += Number(r.valor || 0);
       }
@@ -149,6 +191,7 @@ export async function GET() {
 
     acoesSnap.docs.forEach((doc) => {
       const a = doc.data();
+
       if (dentroDaSemana(a.criadoEm)) {
         totalAcoes++;
       }
@@ -156,6 +199,7 @@ export async function GET() {
 
     plantoesSnap.docs.forEach((doc) => {
       const p = doc.data();
+
       if (p.status === "fechado" && dentroDaSemana(p.fim || p.inicio)) {
         totalHoras += Number(p.minutos || 0);
       }
@@ -204,19 +248,21 @@ export async function GET() {
       } else {
         naoBateramMeta++;
       }
-    });
-
-    const horas = Math.floor(totalHoras / 60);
+    });    const horas = Math.floor(totalHoras / 60);
     const minutos = totalHoras % 60;
+
+    const inicioSemana = inicioDaSemana();
+    const fimSemana = fimDaSemana();
 
     await canal.send({
       embeds: [
         {
           color: 0xe74c3c,
           title: "📊 Relatório Semanal - Inglaterra",
-          description: `Semana: ${inicioDaSemana().toLocaleDateString(
-            "pt-BR"
-          )} até ${fimDaSemana().toLocaleDateString("pt-BR")}`,
+          description: `Semana: ${dataBrasilSomenteData(
+            inicioSemana
+          )} até ${dataBrasilSomenteData(fimSemana)}
+Gerado em: ${dataBrasilAgora()}`,
           fields: [
             {
               name: "👥 Membros aprovados",
@@ -282,7 +328,6 @@ export async function GET() {
           footer: {
             text: "Painel Inglaterra",
           },
-          timestamp: new Date().toISOString(),
         },
       ],
     });

@@ -38,6 +38,15 @@ export async function POST(request: Request) {
         ? 0xff0000
         : 0xf1c40f;
 
+    const dataBrasil = new Date().toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
     await canal.send({
       embeds: [
         {
@@ -46,22 +55,22 @@ export async function POST(request: Request) {
           fields: [
             {
               name: "👤 Membro",
-              value: body.nome,
+              value: body.nome || "Não informado",
               inline: false,
             },
             {
               name: "Cargo Anterior",
-              value: body.cargoAntigo,
+              value: body.cargoAntigo || "Não informado",
               inline: true,
             },
             {
               name: "Novo Cargo",
-              value: body.cargoNovo,
+              value: body.cargoNovo || "Não informado",
               inline: true,
             },
             {
               name: "📅 Data",
-              value: new Date().toLocaleString("pt-BR"),
+              value: dataBrasil,
               inline: false,
             },
           ],

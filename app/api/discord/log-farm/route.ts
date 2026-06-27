@@ -47,6 +47,15 @@ export async function POST(request: Request) {
         ? `Reprovado por: ${body.aprovadoPor || "Gerência"}`
         : "Aguardando aprovação no painel.";
 
+    const dataBrasil = new Date().toLocaleString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+
     await canal.send({
       embeds: [
         {
@@ -55,7 +64,11 @@ export async function POST(request: Request) {
           fields: [
             {
               name: "👤 Membro",
-              value: body.nomeRP || body.nomeDiscord || body.nome || "Sem nome",
+              value:
+                body.nomeRP ||
+                body.nomeDiscord ||
+                body.nome ||
+                "Sem nome",
               inline: false,
             },
             {
@@ -95,7 +108,7 @@ export async function POST(request: Request) {
             },
             {
               name: "📅 Data",
-              value: new Date().toLocaleString("pt-BR"),
+              value: dataBrasil,
               inline: false,
             },
           ],
