@@ -89,7 +89,9 @@ export async function POST(request: Request) {
             },
             {
               name: "📅 Data",
-              value: new Date().toLocaleString("pt-BR"),
+              value: new Date().toLocaleString("pt-BR", {
+  timeZone: "America/Sao_Paulo",
+}),
               inline: false,
             },
           ],
