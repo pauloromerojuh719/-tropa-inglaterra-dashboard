@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { Client, GatewayIntentBits, TextChannel } from "discord.js";
+
 export async function GET() {
   return NextResponse.json({
     rota: "log-reembolsos ativa",
@@ -25,8 +26,12 @@ export async function POST(request: Request) {
       await client.destroy();
 
       return NextResponse.json(
-        { erro: "Canal de reembolsos não encontrado." },
-        { status: 500 }
+        {
+          erro: "Canal de reembolsos não encontrado.",
+        },
+        {
+          status: 500,
+        }
       );
     }
 
@@ -97,13 +102,19 @@ export async function POST(request: Request) {
 
     await client.destroy();
 
-    return NextResponse.json({ sucesso: true });
-  } catch (erro) {
-    console.error(erro);
+    return NextResponse.json({
+      sucesso: true,
+    });
+  } catch (erro: any) {
+    console.error("ERRO LOG REEMBOLSO:", erro);
 
     return NextResponse.json(
-      { erro: "Erro ao enviar log de reembolso." },
-      { status: 500 }
+      {
+        erro: erro?.message || String(erro),
+      },
+      {
+        status: 500,
+      }
     );
   }
 }
