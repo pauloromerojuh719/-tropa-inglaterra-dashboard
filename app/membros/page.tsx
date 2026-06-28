@@ -28,7 +28,12 @@ export default function MembrosPage() {
         id: doc.id,
         ...(doc.data() as Omit<Membro, "id">),
       }))
-      .filter((membro) => membro.status === "aprovado")
+      .filter(
+        (membro) =>
+          membro.status === "aprovado" &&
+          membro.passaporte &&
+          membro.passaporte.trim() !== ""
+      )
       .sort((a, b) =>
         (a.nomeRP || a.nome || "").localeCompare(
           b.nomeRP || b.nome || "",
@@ -61,7 +66,7 @@ export default function MembrosPage() {
         </h3>
 
         <p className="mt-2 text-zinc-300">
-          🎫 Passaporte: {membro.passaporte || "Não informado"}
+          🎫 Passaporte: {membro.passaporte}
         </p>
 
         <p className="mt-2 font-bold text-red-400">{membro.cargo}</p>
@@ -82,7 +87,7 @@ export default function MembrosPage() {
 
         {lista.length === 0 ? (
           <p className="rounded-xl border border-zinc-800 bg-zinc-950 p-5 text-zinc-400">
-            Nenhum membro neste cargo.
+            Nenhum membro cadastrado neste cargo.
           </p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2">
@@ -95,9 +100,13 @@ export default function MembrosPage() {
 
   return (
     <main className="min-h-screen bg-black p-10 text-white">
-      <h1 className="mb-10 text-center text-5xl font-black text-red-600">
+      <h1 className="mb-4 text-center text-5xl font-black text-red-600">
         👥 MEMBROS DA INGLATERRA
       </h1>
+
+      <p className="mb-10 text-center text-zinc-400">
+        Mostrando apenas membros que concluíram o cadastro com passaporte.
+      </p>
 
       <SecaoMembros titulo="🏆 Líder" lista={lideres} />
       <SecaoMembros titulo="👑 Vice-Líder" lista={vices} />
