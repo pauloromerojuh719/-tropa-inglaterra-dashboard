@@ -124,24 +124,29 @@ export default function MetasPage() {
       }
     });
 
-    const resultado = Object.values(resumo).map((membro) => {
-      const extraFolhas = Math.max(membro.saldoFolhas - META_FOLHAS, 0);
-      const extraOpios = Math.max(membro.saldoOpios - META_OPIOS, 0);
-      const extraSeringas = Math.max(membro.saldoSeringas - META_SERINGAS, 0);
-      const extraAgulhas = Math.max(membro.saldoAgulhas - META_AGULHAS, 0);
+    const resultado = Object.values(resumo)
+      .map((membro) => {
+        const extraFolhas = Math.max(membro.saldoFolhas - META_FOLHAS, 0);
+        const extraOpios = Math.max(membro.saldoOpios - META_OPIOS, 0);
+        const extraSeringas = Math.max(
+          membro.saldoSeringas - META_SERINGAS,
+          0
+        );
+        const extraAgulhas = Math.max(membro.saldoAgulhas - META_AGULHAS, 0);
 
-      return {
-        ...membro,
-        folhas: membro.folhas + extraFolhas,
-        opios: membro.opios + extraOpios,
-        seringas: membro.seringas + extraSeringas,
-        agulhas: membro.agulhas + extraAgulhas,
-        saldoFolhas: extraFolhas,
-        saldoOpios: extraOpios,
-        saldoSeringas: extraSeringas,
-        saldoAgulhas: extraAgulhas,
-      };
-    });
+        return {
+          ...membro,
+          folhas: membro.folhas + extraFolhas,
+          opios: membro.opios + extraOpios,
+          seringas: membro.seringas + extraSeringas,
+          agulhas: membro.agulhas + extraAgulhas,
+          saldoFolhas: extraFolhas,
+          saldoOpios: extraOpios,
+          saldoSeringas: extraSeringas,
+          saldoAgulhas: extraAgulhas,
+        };
+      })
+      .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR"));
 
     setMembros(resultado);
     setCarregando(false);
@@ -156,9 +161,34 @@ export default function MetasPage() {
     );
   }
 
+  function pendencias(membro: ResumoMembro) {
+    const faltas = [];
+
+    if (membro.folhas < META_FOLHAS) {
+      faltas.push(`Folhas: faltam ${META_FOLHAS - membro.folhas}`);
+    }
+
+    if (membro.opios < META_OPIOS) {
+      faltas.push(`Ópios: faltam ${META_OPIOS - membro.opios}`);
+    }
+
+    if (membro.seringas < META_SERINGAS) {
+      faltas.push(`Seringas: faltam ${META_SERINGAS - membro.seringas}`);
+    }
+
+    if (membro.agulhas < META_AGULHAS) {
+      faltas.push(`Agulhas: faltam ${META_AGULHAS - membro.agulhas}`);
+    }
+
+    return faltas;
+  }
+
   function progresso(valor: number, meta: number) {
     return Math.min((valor / meta) * 100, 100);
   }
+
+  const bateramMeta = membros.filter((membro) => bateuMeta(membro));
+  const naoBateramMeta = membros.filter((membro) => !bateuMeta(membro));
 
   return (
     <main className="min-h-screen bg-black text-white p-10">
@@ -170,6 +200,56 @@ export default function MetasPage() {
 
       {!carregando && membros.length === 0 && (
         <p className="text-zinc-400">Nenhum farm aprovado ainda.</p>
+      )}
+
+      {!carregando && membros.length > 0 && (
+        <div className="mb-10 grid gap-6 md:grid-cols-2">
+          <div className="rounded-xl border border-green-700 bg-zinc-950 p-6">
+            <h2 className="mb-4 text-3xl font-black text-green-400">
+              ✅ Bateram a meta
+            </h2>
+
+            {bateramMeta.length === 0 ? (
+              <p className="text-zinc-400">Ninguém bateu a meta ainda.</p>
+            ) : (
+              <ul className="space-y-2">
+                {bateramMeta.map((membro) => (
+                  <li
+                    key={membro.email || membro.nome}
+                    className="rounded-lg bg-green-950 p-3 font-bold"
+                  >
+                    {membro.nome}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
+          <div className="rounded-xl border border-yellow-700 bg-zinc-950 p-6">
+            <h2 className="mb-4 text-3xl font-black text-yellow-400">
+              ❌ Não bateram a meta
+            </h2>
+
+            {naoBateramMeta.length === 0 ? (
+              <p className="text-zinc-400">Todos bateram a meta.</p>
+            ) : (
+              <ul className="space-y-3">
+                {naoBateramMeta.map((membro) => (
+                  <li
+                    key={membro.email || membro.nome}
+                    className="rounded-lg bg-yellow-950 p-3"
+                  >
+                    <p className="font-bold">{membro.nome}</p>
+
+                    <p className="mt-1 text-sm text-yellow-300">
+                      {pendencias(membro).join(" | ")}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
       )}
 
       <div className="grid gap-6">

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import { collection, doc, getDoc, getDocs } from "firebase/firestore";
+import jsPDF from "jspdf";
 import { db } from "../lib/firebase";
 
 type Membro = {
@@ -40,6 +41,11 @@ type ResumoMembro = {
   agulhas: number;
   total: number;
 };
+
+const META_FOLHAS = 2000;
+const META_OPIOS = 2000;
+const META_SERINGAS = 800;
+const META_AGULHAS = 800;
 
 function nomeExibicao(membro?: Membro) {
   if (!membro) return "Sem nome";
@@ -195,14 +201,39 @@ export default function ControleFarmPage() {
     setFarms(listaFarms);
   }
 
-  function statusMeta(membro: ResumoMembro) {
-    const bateu =
-      membro.folhas >= 2000 &&
-      membro.opios >= 2000 &&
-      membro.seringas >= 800 &&
-      membro.agulhas >= 800;
+  function bateuMeta(membro: ResumoMembro) {
+    return (
+      membro.folhas >= META_FOLHAS &&
+      membro.opios >= META_OPIOS &&
+      membro.seringas >= META_SERINGAS &&
+      membro.agulhas >= META_AGULHAS
+    );
+  }
 
-    return bateu ? "✅ Meta batida" : "⚠️ Falta farm";
+  function statusMeta(membro: ResumoMembro) {
+    return bateuMeta(membro) ? "✅ Meta batida" : "⚠️ Falta farm";
+  }
+
+  function pendenciasMeta(membro: ResumoMembro) {
+    const faltas = [];
+
+    if (membro.folhas < META_FOLHAS) {
+      faltas.push(`Folhas: falta ${META_FOLHAS - membro.folhas}`);
+    }
+
+    if (membro.opios < META_OPIOS) {
+      faltas.push(`Ópios: falta ${META_OPIOS - membro.opios}`);
+    }
+
+    if (membro.seringas < META_SERINGAS) {
+      faltas.push(`Seringas: falta ${META_SERINGAS - membro.seringas}`);
+    }
+
+    if (membro.agulhas < META_AGULHAS) {
+      faltas.push(`Agulhas: falta ${META_AGULHAS - membro.agulhas}`);
+    }
+
+    return faltas.join(" | ");
   }
 
   function farmsDoMembro() {
@@ -225,8 +256,85 @@ export default function ControleFarmPage() {
       });
   }
 
+  const bateramMeta = resumo.filter((membro) => bateuMeta(membro));
+  const naoBateramMeta = resumo.filter((membro) => !bateuMeta(membro));
   const listaFarmsMembro = farmsDoMembro();
   const ultimoFarm = listaFarmsMembro[0];
+
+  function gerarPDFMetas() {
+    const pdf = new jsPDF();
+
+    const totalMembros = resumo.length;
+    const totalBateram = bateramMeta.length;
+    const totalNaoBateram = naoBateramMeta.length;
+    const percentual =
+      totalMembros > 0 ? ((totalBateram / totalMembros) * 100).toFixed(2) : "0";
+
+    let y = 18;
+
+    pdf.setFontSize(18);
+    pdf.text("RELATORIO DE METAS - CONTROLE DE FARM", 14, y);
+
+    y += 10;
+    pdf.setFontSize(11);
+    pdf.text(`Gerado em: ${new Date().toLocaleString("pt-BR")}`, 14, y);
+
+    y += 10;
+    pdf.text(`Total de membros: ${totalMembros}`, 14, y);
+    y += 7;
+    pdf.text(`Bateram a meta: ${totalBateram}`, 14, y);
+    y += 7;
+    pdf.text(`Nao bateram a meta: ${totalNaoBateram}`, 14, y);
+    y += 7;
+    pdf.text(`Conclusao: ${percentual}%`, 14, y);
+
+    y += 12;
+    pdf.setFontSize(15);
+    pdf.text("BATERAM A META", 14, y);
+
+    y += 8;
+    pdf.setFontSize(11);
+
+    bateramMeta.forEach((membro, index) => {
+      if (y > 280) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.text(`${index + 1}. ${membro.membroNome}`, 14, y);
+      y += 7;
+    });
+
+    y += 8;
+
+    if (y > 260) {
+      pdf.addPage();
+      y = 20;
+    }
+
+    pdf.setFontSize(15);
+    pdf.text("NAO BATERAM A META", 14, y);
+
+    y += 8;
+    pdf.setFontSize(11);
+
+    naoBateramMeta.forEach((membro, index) => {
+      if (y > 270) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.text(`${index + 1}. ${membro.membroNome}`, 14, y);
+      y += 6;
+
+      pdf.setFontSize(9);
+      pdf.text(pendenciasMeta(membro), 18, y);
+      pdf.setFontSize(11);
+      y += 8;
+    });
+
+    pdf.save("relatorio-metas-farm.pdf");
+  }
 
   if (carregando) {
     return (
@@ -274,6 +382,67 @@ export default function ControleFarmPage() {
       <h1 className="text-5xl font-black text-red-600">
         🌿 CONTROLE DE FARM
       </h1>
+
+      <button
+        onClick={gerarPDFMetas}
+        className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-black text-white hover:bg-red-600"
+      >
+        📄 Gerar PDF das Metas
+      </button>
+
+      <section className="mt-8 grid gap-6 md:grid-cols-2">
+        <div className="rounded-xl border border-green-700 bg-zinc-950 p-6">
+          <h2 className="text-3xl font-black text-green-400">
+            ✅ Bateram a meta
+          </h2>
+
+          <p className="mt-2 text-zinc-400">Total: {bateramMeta.length}</p>
+
+          <div className="mt-4 grid gap-3">
+            {bateramMeta.length === 0 ? (
+              <p className="text-zinc-500">Ninguém bateu a meta ainda.</p>
+            ) : (
+              bateramMeta.map((membro) => (
+                <div
+                  key={membro.membroId || membro.membroEmail || membro.membroNome}
+                  className="rounded-lg bg-green-950 p-3 font-bold text-green-300"
+                >
+                  ✅ {membro.membroNome}
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-yellow-700 bg-zinc-950 p-6">
+          <h2 className="text-3xl font-black text-yellow-400">
+            ❌ Não bateram a meta
+          </h2>
+
+          <p className="mt-2 text-zinc-400">Total: {naoBateramMeta.length}</p>
+
+          <div className="mt-4 grid gap-3">
+            {naoBateramMeta.length === 0 ? (
+              <p className="text-zinc-500">Todos bateram a meta.</p>
+            ) : (
+              naoBateramMeta.map((membro) => (
+                <div
+                  key={membro.membroId || membro.membroEmail || membro.membroNome}
+                  className="rounded-lg bg-yellow-950 p-3"
+                >
+                  <p className="font-bold text-yellow-300">
+                    ❌ {membro.membroNome}
+                  </p>
+
+                  <p className="mt-1 text-sm text-yellow-200">
+                    {pendenciasMeta(membro)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
         <h2 className="text-3xl font-bold">Resumo dos Membros</h2>
