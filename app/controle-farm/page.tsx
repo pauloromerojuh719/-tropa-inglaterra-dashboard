@@ -39,6 +39,10 @@ type ResumoMembro = {
   opios: number;
   seringas: number;
   agulhas: number;
+  sobraFolhas: number;
+  sobraOpios: number;
+  sobraSeringas: number;
+  sobraAgulhas: number;
   total: number;
 };
 
@@ -74,6 +78,35 @@ export default function ControleFarmPage() {
   useEffect(() => {
     verificarPermissao();
   }, [session]);
+
+  function inicioSemanaAtual() {
+    const hoje = new Date();
+    const dia = hoje.getDay();
+    const diff = dia === 0 ? -6 : 1 - dia;
+
+    const inicio = new Date(hoje);
+    inicio.setDate(hoje.getDate() + diff);
+    inicio.setHours(0, 0, 0, 0);
+
+    return inicio;
+  }
+
+  function inicioSemanaPassada() {
+    const inicio = inicioSemanaAtual();
+    const passada = new Date(inicio);
+    passada.setDate(inicio.getDate() - 7);
+    return passada;
+  }
+
+  function pegarDataFarm(farm: Farm) {
+    if (!farm.criadoEm) return null;
+
+    if (farm.criadoEm.toDate) {
+      return farm.criadoEm.toDate();
+    }
+
+    return new Date(farm.criadoEm);
+  }
 
   function formatarData(data: any) {
     if (!data?.toDate) return "Sem data";
@@ -127,6 +160,9 @@ export default function ControleFarmPage() {
     const farmSnap = await getDocs(collection(db, "farm"));
     const membrosSnap = await getDocs(collection(db, "membros"));
 
+    const semanaAtual = inicioSemanaAtual();
+    const semanaPassada = inicioSemanaPassada();
+
     const membrosPorId: Record<string, Membro> = {};
     const membrosPorEmail: Record<string, Membro> = {};
 
@@ -142,8 +178,9 @@ export default function ControleFarmPage() {
       }
     });
 
-    const mapa: Record<string, ResumoMembro> = {};
-    const listaFarms: Farm[] = [];
+    const mapaAtual: Record<string, ResumoMembro> = {};
+    const mapaPassado: Record<string, ResumoMembro> = {};
+    const listaFarmsSemanaAtual: Farm[] = [];
 
     farmSnap.docs.forEach((docItem) => {
       const farm = {
@@ -153,6 +190,9 @@ export default function ControleFarmPage() {
 
       if (farm.status !== "aprovado") return;
 
+      const dataFarm = pegarDataFarm(farm);
+      if (!dataFarm) return;
+
       const membroDoCadastro =
         membrosPorId[farm.membroId] || membrosPorEmail[farm.membroEmail];
 
@@ -160,45 +200,109 @@ export default function ControleFarmPage() {
         ? nomeExibicao(membroDoCadastro)
         : farm.membroNome || "Sem nome";
 
+      const membroEmail = farm.membroEmail || membroDoCadastro?.email || "";
+      const membroId = farm.membroId || membroDoCadastro?.discordId || "";
+      const chave = membroId || membroEmail || nomeCorreto;
+
       const farmCorrigido = {
         ...farm,
         membroNome: nomeCorreto,
+        membroEmail,
+        membroId,
       };
 
-      listaFarms.push(farmCorrigido);
+      const modeloVazio: ResumoMembro = {
+        membroNome: nomeCorreto,
+        membroEmail,
+        membroId,
+        folhas: 0,
+        opios: 0,
+        seringas: 0,
+        agulhas: 0,
+        sobraFolhas: 0,
+        sobraOpios: 0,
+        sobraSeringas: 0,
+        sobraAgulhas: 0,
+        total: 0,
+      };
 
-      const chave = farm.membroId || farm.membroEmail || farm.membroNome;
+      const isSemanaAtual = dataFarm >= semanaAtual;
+      const isSemanaPassada = dataFarm >= semanaPassada && dataFarm < semanaAtual;
 
-      if (!mapa[chave]) {
-        mapa[chave] = {
-          membroNome: nomeCorreto,
-          membroEmail: farm.membroEmail || membroDoCadastro?.email || "",
-          membroId: farm.membroId || membroDoCadastro?.discordId || "",
-          folhas: 0,
-          opios: 0,
-          seringas: 0,
-          agulhas: 0,
-          total: 0,
-        };
+      if (isSemanaAtual) {
+        listaFarmsSemanaAtual.push(farmCorrigido);
+
+        if (!mapaAtual[chave]) {
+          mapaAtual[chave] = { ...modeloVazio };
+        }
+
+        mapaAtual[chave].membroNome = nomeCorreto;
+        mapaAtual[chave].folhas += Number(farm.folhas || 0);
+        mapaAtual[chave].opios += Number(farm.opios || 0);
+        mapaAtual[chave].seringas += Number(farm.seringas || 0);
+        mapaAtual[chave].agulhas += Number(farm.agulhas || 0);
       }
 
-      mapa[chave].membroNome = nomeCorreto;
-      mapa[chave].folhas += Number(farm.folhas || 0);
-      mapa[chave].opios += Number(farm.opios || 0);
-      mapa[chave].seringas += Number(farm.seringas || 0);
-      mapa[chave].agulhas += Number(farm.agulhas || 0);
+      if (isSemanaPassada) {
+        if (!mapaPassado[chave]) {
+          mapaPassado[chave] = { ...modeloVazio };
+        }
 
-      mapa[chave].total =
-        mapa[chave].folhas +
-        mapa[chave].opios +
-        mapa[chave].seringas +
-        mapa[chave].agulhas;
+        mapaPassado[chave].membroNome = nomeCorreto;
+        mapaPassado[chave].folhas += Number(farm.folhas || 0);
+        mapaPassado[chave].opios += Number(farm.opios || 0);
+        mapaPassado[chave].seringas += Number(farm.seringas || 0);
+        mapaPassado[chave].agulhas += Number(farm.agulhas || 0);
+      }
     });
 
-    const lista = Object.values(mapa).sort((a, b) => b.total - a.total);
+    const todasChaves = new Set([
+      ...Object.keys(mapaAtual),
+      ...Object.keys(mapaPassado),
+    ]);
+
+    const lista = Array.from(todasChaves).map((chave) => {
+      const atual = mapaAtual[chave];
+      const passado = mapaPassado[chave];
+
+      const base = atual || passado;
+
+      const sobraFolhas = Math.max((passado?.folhas || 0) - META_FOLHAS, 0);
+      const sobraOpios = Math.max((passado?.opios || 0) - META_OPIOS, 0);
+      const sobraSeringas = Math.max(
+        (passado?.seringas || 0) - META_SERINGAS,
+        0
+      );
+      const sobraAgulhas = Math.max(
+        (passado?.agulhas || 0) - META_AGULHAS,
+        0
+      );
+
+      const folhas = (atual?.folhas || 0) + sobraFolhas;
+      const opios = (atual?.opios || 0) + sobraOpios;
+      const seringas = (atual?.seringas || 0) + sobraSeringas;
+      const agulhas = (atual?.agulhas || 0) + sobraAgulhas;
+
+      return {
+        membroNome: base?.membroNome || "Sem nome",
+        membroEmail: base?.membroEmail || "",
+        membroId: base?.membroId || "",
+        folhas,
+        opios,
+        seringas,
+        agulhas,
+        sobraFolhas,
+        sobraOpios,
+        sobraSeringas,
+        sobraAgulhas,
+        total: folhas + opios + seringas + agulhas,
+      };
+    });
+
+    lista.sort((a, b) => b.total - a.total);
 
     setResumo(lista);
-    setFarms(listaFarms);
+    setFarms(listaFarmsSemanaAtual);
   }
 
   function bateuMeta(membro: ResumoMembro) {
@@ -449,7 +553,7 @@ export default function ControleFarmPage() {
 
         {resumo.length === 0 ? (
           <p className="mt-4 text-zinc-400">
-            Nenhum farm aprovado encontrado ainda.
+            Nenhum farm aprovado encontrado nesta semana.
           </p>
         ) : (
           <div className="mt-6 grid gap-4">
@@ -478,6 +582,17 @@ export default function ControleFarmPage() {
                     <p className="mt-2 font-bold text-red-400">
                       {statusMeta(membro)}
                     </p>
+
+                    {(membro.sobraFolhas > 0 ||
+                      membro.sobraOpios > 0 ||
+                      membro.sobraSeringas > 0 ||
+                      membro.sobraAgulhas > 0) && (
+                      <p className="mt-2 text-sm font-bold text-green-400">
+                        Sobra da semana passada: 🍃 {membro.sobraFolhas} | 💊{" "}
+                        {membro.sobraOpios} | 💉 {membro.sobraSeringas} | 🪡{" "}
+                        {membro.sobraAgulhas}
+                      </p>
+                    )}
 
                     <button
                       onClick={() => setMembroSelecionado(membro)}
@@ -584,20 +699,29 @@ export default function ControleFarmPage() {
             </p>
 
             <p className="mt-2">
-              🕒 Último farm:{" "}
+              🕒 Último farm da semana:{" "}
               {ultimoFarm ? formatarData(ultimoFarm.criadoEm) : "Sem farm"}
             </p>
 
             <p className="mt-2">
-              🖼️ Prints enviados: {listaFarmsMembro.length}
+              🖼️ Prints enviados nesta semana: {listaFarmsMembro.length}
+            </p>
+
+            <p className="mt-2 text-green-400">
+              Sobra carregada: 🍃 {membroSelecionado.sobraFolhas} | 💊{" "}
+              {membroSelecionado.sobraOpios} | 💉{" "}
+              {membroSelecionado.sobraSeringas} | 🪡{" "}
+              {membroSelecionado.sobraAgulhas}
             </p>
           </div>
 
-          <h3 className="mt-8 text-2xl font-bold">📸 Prints enviados</h3>
+          <h3 className="mt-8 text-2xl font-bold">📸 Prints da semana</h3>
 
           <div className="mt-4 grid gap-4 md:grid-cols-3">
             {listaFarmsMembro.length === 0 ? (
-              <p className="text-zinc-400">Nenhum print encontrado.</p>
+              <p className="text-zinc-400">
+                Nenhum print encontrado nesta semana.
+              </p>
             ) : (
               listaFarmsMembro.map((farm) => (
                 <div
