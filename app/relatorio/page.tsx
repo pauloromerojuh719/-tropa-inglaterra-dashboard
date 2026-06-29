@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession, signIn } from "next-auth/react";
 import {
+  addDoc,
   collection,
   doc,
   getDoc,
@@ -13,226 +14,263 @@ import { db } from "../lib/firebase";
 import jsPDF from "jspdf";
 
 type Membro = {
+  nome?: string;
+  nomeRP?: string;
+  email?: string;
   cargo: string;
   status: string;
 };
 
-type Registro = {
-  id: string;
-  [key: string]: any;
+type Venda = {
+  item: string;
+  quantidade: number;
+  valor: number;
+  vendedor: string;
+  tipo?: string;
+  criadoEm: any;
 };
 
-const CARGOS_PERMITIDOS = [
-  "Líder",
-  "Vice-Líder",
-  "Gerente Geral",
-  "Gerente de Farm",
-  "Gerente de Vendas",
-  "Gerente de Produção",
-  "Gerente de Compras",
-  "Gerente de Ações",
-];
+type Compra = {
+  item: string;
+  quantidade: number;
+  valor: number;
+  comprador: string;
+  criadoEm: any;
+};
 
-export default function RelatoriosPage() {
-  const { data: session, status } = useSession();
+type Producao = {
+  item: string;
+  quantidade: number;
+  responsavel: string;
+  criadoEm: any;
+};
 
+type Reembolso = {
+  nome: string;
+  item: string;
+  quantidade: number;
+  valor: number;
+  status: string;
+  solicitadoPor?: string;
+  criadoEm: any;
+};
+
+type Acao = {
+  tipo?: string;
+  valor: number;
+  status?: string;
+  responsavel?: string;
+  criadoEm: any;
+};
+
+type Farm = {
+  membroId?: string;
+  membroNome?: string;
+  folhas: number;
+  opios: number;
+  seringas: number;
+  agulhas: number;
+  status: string;
+  criadoEm: any;
+};
+
+type Plantao = {
+  nome?: string;
+  membroNome?: string;
+  minutos?: number;
+  inicio?: any;
+  criadoEm?: any;
+};
+
+type Aba = "vendas" | "producao" | "compras" | "reembolsos" | "acoes";
+
+export default function RelatorioPage() {
+  const { data: session } = useSession();
+
+  const [aba, setAba] = useState<Aba>("vendas");
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [gerandoAdv, setGerandoAdv] = useState(false);
 
-  useEffect(() => {
-    verificarPermissao();
-  }, [session]);
+  const [vendasDetalhadas, setVendasDetalhadas] = useState<Venda[]>([]);
+  const [comprasDetalhadas, setComprasDetalhadas] = useState<Compra[]>([]);
+  const [producoesDetalhadas, setProducoesDetalhadas] = useState<Producao[]>([]);
+  const [reembolsosDetalhados, setReembolsosDetalhados] = useState<Reembolso[]>([]);
+  const [acoesDetalhadas, setAcoesDetalhadas] = useState<Acao[]>([]);
 
-  async function verificarPermissao() {
-    if (!session?.user?.email) {
-      setCarregando(false);
-      return;
-    }
+  const META_FOLHAS = 2000;
+  const META_OPIOS = 2000;
+  const META_SERINGAS = 800;
+  const META_AGULHAS = 800;
 
-    const membroRef = doc(db, "membros", session.user.email);
-    const membroSnap = await getDoc(membroRef);
-
-    if (!membroSnap.exists()) {
-      setTemPermissao(false);
-      setCarregando(false);
-      return;
-    }
-
-    const membro = membroSnap.data() as Membro;
-
-    setTemPermissao(
-      membro.status === "aprovado" && CARGOS_PERMITIDOS.includes(membro.cargo)
-    );
-
-    setCarregando(false);
-  }
-
-  function pegarSemanaPassada() {
+  function inicioDaSemana() {
     const hoje = new Date();
+    const dia = hoje.getDay();
+    const diferenca = dia === 0 ? 6 : dia - 1;
+    const inicio = new Date(hoje);
 
-    const diaSemana = hoje.getDay();
-    const diasDesdeSegunda = diaSemana === 0 ? 6 : diaSemana - 1;
-
-    const segundaAtual = new Date(hoje);
-    segundaAtual.setDate(hoje.getDate() - diasDesdeSegunda);
-    segundaAtual.setHours(0, 0, 0, 0);
-
-    const inicio = new Date(segundaAtual);
-    inicio.setDate(segundaAtual.getDate() - 7);
+    inicio.setDate(hoje.getDate() - diferenca);
     inicio.setHours(0, 0, 0, 0);
 
-    const fim = new Date(segundaAtual);
-    fim.setDate(segundaAtual.getDate() - 1);
+    return inicio;
+  }
+
+  function fimDaSemana() {
+    const inicio = inicioDaSemana();
+    const fim = new Date(inicio);
+
+    fim.setDate(inicio.getDate() + 6);
+    fim.setHours(23, 59, 59, 999);
+
+    return fim;
+  }
+
+  function semanaPassada() {
+    const inicioAtual = inicioDaSemana();
+
+    const inicio = new Date(inicioAtual);
+    inicio.setDate(inicioAtual.getDate() - 7);
+    inicio.setHours(0, 0, 0, 0);
+
+    const fim = new Date(inicioAtual);
+    fim.setDate(inicioAtual.getDate() - 1);
     fim.setHours(23, 59, 59, 999);
 
     return { inicio, fim };
   }
 
-  function dentroDaSemana(data: any, inicio: Date, fim: Date) {
-    if (!data) return false;
-
-    let dataConvertida: Date;
-
-    if (data instanceof Timestamp) {
-      dataConvertida = data.toDate();
-    } else if (data?.seconds) {
-      dataConvertida = new Date(data.seconds * 1000);
-    } else {
-      dataConvertida = new Date(data);
-    }
-
-    return dataConvertida >= inicio && dataConvertida <= fim;
+  function converterData(data: any) {
+    if (!data) return null;
+    if (data?.toDate) return data.toDate();
+    if (data?.seconds) return new Date(data.seconds * 1000);
+    return new Date(data);
   }
 
-  function formatarMoeda(valor: number) {
+  function dataOk(data: any) {
+    const d = converterData(data);
+    return d && d >= inicioDaSemana() && d <= fimDaSemana();
+  }
+
+  function dataOkPeriodo(data: any, inicio: Date, fim: Date) {
+    const d = converterData(data);
+    return d && d >= inicio && d <= fim;
+  }
+
+  function formatarData(data: any) {
+    const d = converterData(data);
+    if (!d) return "Sem data";
+    return d.toLocaleDateString("pt-BR");
+  }
+
+  function formatarNumero(valor: number) {
+    return valor.toLocaleString("pt-BR");
+  }
+
+  function formatarDinheiro(valor: number) {
     return valor.toLocaleString("pt-BR", {
       style: "currency",
       currency: "BRL",
     });
   }
 
-  function formatarData(data: Date) {
-    return data.toLocaleDateString("pt-BR");
+  function somarDinheiroPorPessoa<T extends { valor?: number }>(
+    lista: T[],
+    campoNome: keyof T
+  ) {
+    const resumo: Record<string, number> = {};
+
+    lista.forEach((item) => {
+      const nome = String(item[campoNome] || "Sem responsável");
+      resumo[nome] = (resumo[nome] || 0) + Number(item.valor || 0);
+    });
+
+    return resumo;
   }
 
-  async function buscarColecao(nome: string) {
-    const snapshot = await getDocs(collection(db, nome));
-    return snapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Registro[];
+  function somarQuantidadePorPessoa<T extends { quantidade?: number }>(
+    lista: T[],
+    campoNome: keyof T
+  ) {
+    const resumo: Record<string, number> = {};
+
+    lista.forEach((item) => {
+      const nome = String(item[campoNome] || "Sem responsável");
+      resumo[nome] = (resumo[nome] || 0) + Number(item.quantidade || 0);
+    });
+
+    return resumo;
+  }
+
+  async function carregarRelatorios() {
+    const vendasSnap = await getDocs(collection(db, "vendas"));
+    const comprasSnap = await getDocs(collection(db, "compras"));
+    const producoesSnap = await getDocs(collection(db, "producoes"));
+    const reembolsosSnap = await getDocs(collection(db, "reembolsos"));
+    const acoesSnap = await getDocs(collection(db, "acoes"));
+
+    setVendasDetalhadas(
+      vendasSnap.docs.map((docItem) => docItem.data() as Venda).filter((v) => dataOk(v.criadoEm))
+    );
+
+    setComprasDetalhadas(
+      comprasSnap.docs.map((docItem) => docItem.data() as Compra).filter((c) => dataOk(c.criadoEm))
+    );
+
+    setProducoesDetalhadas(
+      producoesSnap.docs.map((docItem) => docItem.data() as Producao).filter((p) => dataOk(p.criadoEm))
+    );
+
+    setReembolsosDetalhados(
+      reembolsosSnap.docs.map((docItem) => docItem.data() as Reembolso).filter((r) => dataOk(r.criadoEm))
+    );
+
+    setAcoesDetalhadas(
+      acoesSnap.docs.map((docItem) => docItem.data() as Acao).filter((a) => dataOk(a.criadoEm))
+    );
   }
 
   async function gerarRelatorioGeralSemanaPassada() {
-    const { inicio, fim } = pegarSemanaPassada();
+    const { inicio, fim } = semanaPassada();
 
-    const [
-      farms,
-      vendas,
-      compras,
-      producoes,
-      reembolsos,
-      acoes,
-      plantoes,
-      membros,
-    ] = await Promise.all([
-      buscarColecao("farm"),
-      buscarColecao("vendas"),
-      buscarColecao("compras"),
-      buscarColecao("producoes"),
-      buscarColecao("reembolsos"),
-      buscarColecao("acoes"),
-      buscarColecao("plantoes"),
-      buscarColecao("membros"),
-    ]);
+    const vendasSnap = await getDocs(collection(db, "vendas"));
+    const comprasSnap = await getDocs(collection(db, "compras"));
+    const producoesSnap = await getDocs(collection(db, "producoes"));
+    const reembolsosSnap = await getDocs(collection(db, "reembolsos"));
+    const acoesSnap = await getDocs(collection(db, "acoes"));
+    const farmSnap = await getDocs(collection(db, "farm"));
+    const plantaoSnap = await getDocs(collection(db, "plantoes"));
+    const membrosSnap = await getDocs(collection(db, "membros"));
 
-    const farmsSemana = farms.filter(
-      (f) => f.status === "aprovado" && dentroDaSemana(f.criadoEm, inicio, fim)
-    );
+    const vendas = vendasSnap.docs.map((d) => d.data() as Venda).filter((v) => dataOkPeriodo(v.criadoEm, inicio, fim));
+    const compras = comprasSnap.docs.map((d) => d.data() as Compra).filter((c) => dataOkPeriodo(c.criadoEm, inicio, fim));
+    const producoes = producoesSnap.docs.map((d) => d.data() as Producao).filter((p) => dataOkPeriodo(p.criadoEm, inicio, fim));
+    const reembolsos = reembolsosSnap.docs.map((d) => d.data() as Reembolso).filter((r) => dataOkPeriodo(r.criadoEm, inicio, fim));
+    const acoes = acoesSnap.docs.map((d) => d.data() as Acao).filter((a) => dataOkPeriodo(a.criadoEm, inicio, fim));
+    const farms = farmSnap.docs.map((d) => d.data() as Farm).filter((f) => f.status === "aprovado" && dataOkPeriodo(f.criadoEm, inicio, fim));
+    const plantoes = plantaoSnap.docs.map((d) => d.data() as Plantao).filter((p) => dataOkPeriodo(p.inicio || p.criadoEm, inicio, fim));
+    const membros = membrosSnap.docs.map((d) => d.data() as Membro).filter((m) => m.status === "aprovado");
 
-    const vendasSemana = vendas.filter((v) =>
-      dentroDaSemana(v.criadoEm, inicio, fim)
-    );
+    const totalVendas = vendas.reduce((t, v) => t + Number(v.valor || 0), 0);
+    const totalCompras = compras.reduce((t, c) => t + Number(c.valor || 0), 0);
+    const totalProducoes = producoes.reduce((t, p) => t + Number(p.quantidade || 0), 0);
+    const totalReembolsos = reembolsos.reduce((t, r) => t + Number(r.valor || 0), 0);
+    const totalAcoes = acoes.reduce((t, a) => t + Number(a.valor || 0), 0);
+    const totalHoras = plantoes.reduce((t, p) => t + Number(p.minutos || 0), 0);
 
-    const comprasSemana = compras.filter((c) =>
-      dentroDaSemana(c.criadoEm, inicio, fim)
-    );
+    const folhas = farms.reduce((t, f) => t + Number(f.folhas || 0), 0);
+    const opios = farms.reduce((t, f) => t + Number(f.opios || 0), 0);
+    const seringas = farms.reduce((t, f) => t + Number(f.seringas || 0), 0);
+    const agulhas = farms.reduce((t, f) => t + Number(f.agulhas || 0), 0);
 
-    const producoesSemana = producoes.filter((p) =>
-      dentroDaSemana(p.criadoEm, inicio, fim)
-    );
+    const saldo = totalVendas + totalAcoes - totalCompras - totalReembolsos;
 
-    const reembolsosSemana = reembolsos.filter((r) =>
-      dentroDaSemana(r.criadoEm, inicio, fim)
-    );
+    const farmPorMembro: Record<string, any> = {};
 
-    const acoesSemana = acoes.filter((a) =>
-      dentroDaSemana(a.criadoEm, inicio, fim)
-    );
+    farms.forEach((f) => {
+      const nome = f.membroNome || "Sem nome";
 
-    const plantoesSemana = plantoes.filter((p) =>
-      dentroDaSemana(p.inicio || p.criadoEm, inicio, fim)
-    );
-
-    const membrosAprovados = membros.filter((m) => m.status === "aprovado");
-
-    const totalFolhas = farmsSemana.reduce(
-      (soma, f) => soma + Number(f.folhas || 0),
-      0
-    );
-    const totalOpios = farmsSemana.reduce(
-      (soma, f) => soma + Number(f.opios || 0),
-      0
-    );
-    const totalSeringas = farmsSemana.reduce(
-      (soma, f) => soma + Number(f.seringas || 0),
-      0
-    );
-    const totalAgulhas = farmsSemana.reduce(
-      (soma, f) => soma + Number(f.agulhas || 0),
-      0
-    );
-
-    const totalVendas = vendasSemana.reduce(
-      (soma, v) => soma + Number(v.valor || 0),
-      0
-    );
-
-    const totalCompras = comprasSemana.reduce(
-      (soma, c) => soma + Number(c.valor || 0),
-      0
-    );
-
-    const totalReembolsos = reembolsosSemana.reduce(
-      (soma, r) => soma + Number(r.valor || 0),
-      0
-    );
-
-    const totalProduzido = producoesSemana.reduce(
-      (soma, p) => soma + Number(p.quantidade || 0),
-      0
-    );
-
-    const totalHoras = plantoesSemana.reduce(
-      (soma, p) => soma + Number(p.minutos || 0),
-      0
-    );
-
-    const saldoSemana = totalVendas - totalCompras - totalReembolsos;
-
-    const resumoPorMembro: Record<string, any> = {};
-
-    farmsSemana.forEach((farm) => {
-      const nome =
-        farm.membroNome ||
-        farm.nome ||
-        farm.responsavel ||
-        farm.membroEmail ||
-        "Sem nome";
-
-      if (!resumoPorMembro[nome]) {
-        resumoPorMembro[nome] = {
-          nome,
+      if (!farmPorMembro[nome]) {
+        farmPorMembro[nome] = {
           folhas: 0,
           opios: 0,
           seringas: 0,
@@ -240,235 +278,586 @@ export default function RelatoriosPage() {
         };
       }
 
-      resumoPorMembro[nome].folhas += Number(farm.folhas || 0);
-      resumoPorMembro[nome].opios += Number(farm.opios || 0);
-      resumoPorMembro[nome].seringas += Number(farm.seringas || 0);
-      resumoPorMembro[nome].agulhas += Number(farm.agulhas || 0);
+      farmPorMembro[nome].folhas += Number(f.folhas || 0);
+      farmPorMembro[nome].opios += Number(f.opios || 0);
+      farmPorMembro[nome].seringas += Number(f.seringas || 0);
+      farmPorMembro[nome].agulhas += Number(f.agulhas || 0);
     });
 
-    const docPDF = new jsPDF();
+    const texto = `
+RELATÓRIO GERAL DA SEMANA PASSADA - INGLATERRA
 
-    let y = 15;
+Período: ${formatarData(inicio)} até ${formatarData(fim)}
 
-    function titulo(texto: string) {
-      docPDF.setFontSize(16);
-      docPDF.text(texto, 10, y);
-      y += 10;
-    }
+RESUMO GERAL
 
-    function linha(texto: string) {
-      docPDF.setFontSize(10);
-      docPDF.text(texto, 10, y);
-      y += 7;
+Membros aprovados: ${membros.length}
 
-      if (y > 280) {
-        docPDF.addPage();
-        y = 15;
-      }
-    }
+Vendas: ${formatarDinheiro(totalVendas)}
+Ações: ${formatarDinheiro(totalAcoes)}
+Compras: ${formatarDinheiro(totalCompras)}
+Reembolsos: ${formatarDinheiro(totalReembolsos)}
+Saldo da semana: ${formatarDinheiro(saldo)}
 
-    titulo("RELATÓRIO GERAL - TROPA DA INGLATERRA");
+Produção total: ${formatarNumero(totalProducoes)}
+Horas registradas: ${(totalHoras / 60).toFixed(1)}h
 
-    linha(`Período: ${formatarData(inicio)} até ${formatarData(fim)}`);
-    linha(`Gerado por: ${session?.user?.name || session?.user?.email}`);
-    linha("");
+FARM APROVADO
 
-    titulo("RESUMO GERAL");
+Folhas: ${formatarNumero(folhas)}
+Ópios: ${formatarNumero(opios)}
+Seringas: ${formatarNumero(seringas)}
+Agulhas: ${formatarNumero(agulhas)}
 
-    linha(`Membros aprovados: ${membrosAprovados.length}`);
-    linha(`Farm aprovado na semana: ${farmsSemana.length} registros`);
-    linha(`Vendas: ${formatarMoeda(totalVendas)}`);
-    linha(`Compras: ${formatarMoeda(totalCompras)}`);
-    linha(`Reembolsos: ${formatarMoeda(totalReembolsos)}`);
-    linha(`Saldo da semana: ${formatarMoeda(saldoSemana)}`);
-    linha(`Produção total: ${totalProduzido}`);
-    linha(`Ações registradas: ${acoesSemana.length}`);
-    linha(`Horas registradas: ${(totalHoras / 60).toFixed(1)}h`);
-    linha("");
+FARM POR MEMBRO
 
-    titulo("FARM TOTAL DA SEMANA");
+${
+  Object.keys(farmPorMembro).length
+    ? Object.entries(farmPorMembro)
+        .map(([nome, f]: any) =>
+          `${nome}: Folhas ${formatarNumero(f.folhas)} | Ópios ${formatarNumero(f.opios)} | Seringas ${formatarNumero(f.seringas)} | Agulhas ${formatarNumero(f.agulhas)}`
+        )
+        .join("\n")
+    : "Nenhum farm aprovado na semana passada."
+}
 
-    linha(`Folhas: ${totalFolhas}`);
-    linha(`Ópios: ${totalOpios}`);
-    linha(`Seringas: ${totalSeringas}`);
-    linha(`Agulhas: ${totalAgulhas}`);
-    linha("");
+VENDAS DETALHADAS
 
-    titulo("FARM POR MEMBRO");
+${
+  vendas.length
+    ? vendas.map((v) =>
+        `Item: ${v.item || "Sem item"} | Qtd: ${formatarNumero(Number(v.quantidade || 0))} | Valor: ${formatarDinheiro(Number(v.valor || 0))} | Vendedor: ${v.vendedor || "Sem vendedor"} | Data: ${formatarData(v.criadoEm)}`
+      ).join("\n")
+    : "Nenhuma venda registrada."
+}
 
-    Object.values(resumoPorMembro)
-      .sort((a: any, b: any) => a.nome.localeCompare(b.nome, "pt-BR"))
-      .forEach((m: any) => {
-        linha(
-          `${m.nome} | Folhas: ${m.folhas} | Ópios: ${m.opios} | Seringas: ${m.seringas} | Agulhas: ${m.agulhas}`
-        );
-      });
+COMPRAS DETALHADAS
 
-    linha("");
+${
+  compras.length
+    ? compras.map((c) =>
+        `Item: ${c.item || "Sem item"} | Qtd: ${formatarNumero(Number(c.quantidade || 0))} | Valor: ${formatarDinheiro(Number(c.valor || 0))} | Comprador: ${c.comprador || "Sem comprador"} | Data: ${formatarData(c.criadoEm)}`
+      ).join("\n")
+    : "Nenhuma compra registrada."
+}
 
-    titulo("VENDAS");
+PRODUÇÃO DETALHADA
 
-    if (vendasSemana.length === 0) {
-      linha("Nenhuma venda registrada.");
-    } else {
-      vendasSemana.forEach((v) => {
-        linha(
-          `${v.item || "Item"} | Qtd: ${v.quantidade || 0} | Valor: ${formatarMoeda(
-            Number(v.valor || 0)
-          )} | Vendedor: ${v.vendedor || "Não informado"}`
-        );
-      });
-    }
+${
+  producoes.length
+    ? producoes.map((p) =>
+        `Item: ${p.item || "Sem item"} | Qtd: ${formatarNumero(Number(p.quantidade || 0))} | Responsável: ${p.responsavel || "Sem responsável"} | Data: ${formatarData(p.criadoEm)}`
+      ).join("\n")
+    : "Nenhuma produção registrada."
+}
 
-    linha("");
+REEMBOLSOS DETALHADOS
 
-    titulo("COMPRAS");
+${
+  reembolsos.length
+    ? reembolsos.map((r) =>
+        `Nome: ${r.nome || "Sem nome"} | Item: ${r.item || "Sem item"} | Valor: ${formatarDinheiro(Number(r.valor || 0))} | Status: ${r.status || "Não informado"} | Data: ${formatarData(r.criadoEm)}`
+      ).join("\n")
+    : "Nenhum reembolso registrado."
+}
 
-    if (comprasSemana.length === 0) {
-      linha("Nenhuma compra registrada.");
-    } else {
-      comprasSemana.forEach((c) => {
-        linha(
-          `${c.item || "Item"} | Qtd: ${c.quantidade || 0} | Valor: ${formatarMoeda(
-            Number(c.valor || 0)
-          )} | Comprador: ${c.comprador || "Não informado"}`
-        );
-      });
-    }
+AÇÕES DETALHADAS
 
-    linha("");
+${
+  acoes.length
+    ? acoes.map((a) =>
+        `Ação: ${a.tipo || "Sem tipo"} | Valor: ${formatarDinheiro(Number(a.valor || 0))} | Status: ${a.status || "Não informado"} | Responsável: ${a.responsavel || "Sem responsável"} | Data: ${formatarData(a.criadoEm)}`
+      ).join("\n")
+    : "Nenhuma ação registrada."
+}
+`.trim();
 
-    titulo("PRODUÇÃO");
-
-    if (producoesSemana.length === 0) {
-      linha("Nenhuma produção registrada.");
-    } else {
-      producoesSemana.forEach((p) => {
-        linha(
-          `${p.item || "Item"} | Qtd: ${p.quantidade || 0} | Responsável: ${
-            p.responsavel || "Não informado"
-          }`
-        );
-      });
-    }
-
-    linha("");
-
-    titulo("REEMBOLSOS");
-
-    if (reembolsosSemana.length === 0) {
-      linha("Nenhum reembolso registrado.");
-    } else {
-      reembolsosSemana.forEach((r) => {
-        linha(
-          `${r.nome || "Nome"} | ${r.item || "Item"} | Valor: ${formatarMoeda(
-            Number(r.valor || 0)
-          )} | Status: ${r.status || "pendente"}`
-        );
-      });
-    }
-
-    linha("");
-
-    titulo("AÇÕES");
-
-    if (acoesSemana.length === 0) {
-      linha("Nenhuma ação registrada.");
-    } else {
-      acoesSemana.forEach((a) => {
-        linha(
-          `${a.tipo || a.nome || "Ação"} | Status: ${
-            a.status || "Não informado"
-          } | Valor: ${formatarMoeda(Number(a.valor || 0))}`
-        );
-      });
-    }
-
-    docPDF.save(
-      `relatorio-geral-semana-${formatarData(inicio).replaceAll(
-        "/",
-        "-"
-      )}-a-${formatarData(fim).replaceAll("/", "-")}.pdf`
+    gerarPDF(
+      "RELATÓRIO GERAL DA SEMANA PASSADA",
+      texto,
+      "relatorio-geral-semana-passada-inglaterra.pdf"
     );
   }
 
-  if (status === "loading" || carregando) {
-    return (
-      <main className="min-h-screen bg-zinc-950 p-6 text-white">
-        <p>Carregando...</p>
-      </main>
+  async function gerarAdvertenciasAutomaticas() {
+    const confirmar = confirm(
+      "Deseja gerar advertências automáticas para quem não bateu a meta da semana?"
     );
+
+    if (!confirmar) return;
+
+    setGerandoAdv(true);
+
+    try {
+      const membrosSnap = await getDocs(collection(db, "membros"));
+      const farmSnap = await getDocs(collection(db, "farm"));
+      const advSnap = await getDocs(collection(db, "advertencias"));
+
+      const semanaInicio = inicioDaSemana().toISOString();
+      const semanaFim = fimDaSemana().toISOString();
+
+      let criadas = 0;
+
+      for (const membroDoc of membrosSnap.docs) {
+        const membro = membroDoc.data() as Membro;
+        const membroId = membroDoc.id;
+
+        const isento =
+          membro.cargo === "Elite" ||
+          membro.cargo === "Gerente de Ações" ||
+          membro.cargo === "Líder" ||
+          membro.cargo === "Vice-Líder";
+
+        if (membro.status !== "aprovado" || isento) continue;
+
+        const farms = farmSnap.docs
+          .map((f) => f.data() as Farm)
+          .filter(
+            (f) =>
+              f.membroId === membroId &&
+              f.status === "aprovado" &&
+              dataOk(f.criadoEm)
+          );
+
+        const folhas = farms.reduce((t, f) => t + Number(f.folhas || 0), 0);
+        const opios = farms.reduce((t, f) => t + Number(f.opios || 0), 0);
+        const seringas = farms.reduce((t, f) => t + Number(f.seringas || 0), 0);
+        const agulhas = farms.reduce((t, f) => t + Number(f.agulhas || 0), 0);
+
+        const bateuMeta =
+          folhas >= META_FOLHAS &&
+          opios >= META_OPIOS &&
+          seringas >= META_SERINGAS &&
+          agulhas >= META_AGULHAS;
+
+        if (bateuMeta) continue;
+
+        const jaExiste = advSnap.docs.some((adv) => {
+          const a = adv.data() as any;
+          return a.membroId === membroId && a.semanaInicio === semanaInicio;
+        });
+
+        if (jaExiste) continue;
+
+        await addDoc(collection(db, "advertencias"), {
+          membroId,
+          membroNome: membro.nomeRP || membro.nome || "Sem nome",
+          cargo: membro.cargo,
+          motivo: "Não bateu a meta semanal",
+          tipo: "automatica",
+          semanaInicio,
+          semanaFim,
+          folhas,
+          opios,
+          seringas,
+          agulhas,
+          criadoEm: Timestamp.now(),
+        });
+
+        criadas++;
+      }
+
+      alert(`Advertências geradas: ${criadas}`);
+    } catch (error) {
+      console.log(error);
+      alert("Erro ao gerar advertências");
+    }
+
+    setGerandoAdv(false);
+  }
+
+  useEffect(() => {
+    async function verificar() {
+      if (!session?.user) {
+        setCarregando(false);
+        return;
+      }
+
+      const discordId = (session.user as any).id;
+      const snap = await getDoc(doc(db, "membros", discordId));
+
+      if (!snap.exists()) {
+        setCarregando(false);
+        return;
+      }
+
+      const membro = snap.data() as Membro;
+
+      if (
+        membro.status === "aprovado" &&
+        (membro.cargo === "Líder" ||
+          membro.cargo === "Vice-Líder" ||
+          membro.cargo.includes("Gerente"))
+      ) {
+        setTemPermissao(true);
+        await carregarRelatorios();
+      }
+
+      setCarregando(false);
+    }
+
+    verificar();
+  }, [session]);
+
+  const inicioSemana = inicioDaSemana();
+  const fimSemana = fimDaSemana();
+  const semanaAnterior = semanaPassada();
+
+  const totalVendas = vendasDetalhadas.reduce((total, v) => total + Number(v.valor || 0), 0);
+  const totalCompras = comprasDetalhadas.reduce((total, c) => total + Number(c.valor || 0), 0);
+  const totalProducoes = producoesDetalhadas.reduce((total, p) => total + Number(p.quantidade || 0), 0);
+  const totalReembolsos = reembolsosDetalhados.reduce((total, r) => total + Number(r.valor || 0), 0);
+  const totalAcoes = acoesDetalhadas.reduce((total, a) => total + Number(a.valor || 0), 0);
+
+  const vendasPorPessoa = somarDinheiroPorPessoa(vendasDetalhadas, "vendedor");
+  const comprasPorPessoa = somarDinheiroPorPessoa(comprasDetalhadas, "comprador");
+  const producaoPorPessoa = somarQuantidadePorPessoa(producoesDetalhadas, "responsavel");
+  const reembolsoPorPessoa = somarDinheiroPorPessoa(reembolsosDetalhados, "nome");
+  const acoesPorPessoa = somarDinheiroPorPessoa(acoesDetalhadas, "responsavel");
+
+  const textoVendas = `
+RELATÓRIO SEMANAL DE VENDAS - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL DE VENDAS
+${formatarDinheiro(totalVendas)}
+
+VENDAS DETALHADAS
+${
+  vendasDetalhadas.length
+    ? vendasDetalhadas
+        .map(
+          (v) =>
+            `Item: ${v.item || "Sem item"} | Quantidade: ${formatarNumero(Number(v.quantidade || 0))} | Valor: ${formatarDinheiro(Number(v.valor || 0))} | Vendedor: ${v.vendedor || "Sem vendedor"} | Tipo: ${v.tipo || "Não informado"} | Data: ${formatarData(v.criadoEm)}`
+        )
+        .join("\n")
+    : "Nenhuma venda registrada nessa semana."
+}
+
+RESUMO INDIVIDUAL DE VENDAS
+${
+  Object.keys(vendasPorPessoa).length
+    ? Object.entries(vendasPorPessoa).map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`).join("\n")
+    : "Nenhum vendedor com registro nessa semana."
+}
+`.trim();
+
+  const textoCompras = `
+RELATÓRIO SEMANAL DE COMPRAS - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL DE COMPRAS
+${formatarDinheiro(totalCompras)}
+
+COMPRAS DETALHADAS
+${
+  comprasDetalhadas.length
+    ? comprasDetalhadas
+        .map(
+          (c) =>
+            `Item: ${c.item || "Sem item"} | Quantidade: ${formatarNumero(Number(c.quantidade || 0))} | Valor: ${formatarDinheiro(Number(c.valor || 0))} | Comprador: ${c.comprador || "Sem comprador"} | Data: ${formatarData(c.criadoEm)}`
+        )
+        .join("\n")
+    : "Nenhuma compra registrada nessa semana."
+}
+
+RESUMO INDIVIDUAL DE COMPRAS
+${
+  Object.keys(comprasPorPessoa).length
+    ? Object.entries(comprasPorPessoa).map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`).join("\n")
+    : "Nenhum comprador com registro nessa semana."
+}
+`.trim();
+
+  const textoProducao = `
+RELATÓRIO SEMANAL DE PRODUÇÃO - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL PRODUZIDO
+${formatarNumero(totalProducoes)}
+
+PRODUÇÃO DETALHADA
+${
+  producoesDetalhadas.length
+    ? producoesDetalhadas
+        .map(
+          (p) =>
+            `Item: ${p.item || "Sem item"} | Quantidade: ${formatarNumero(Number(p.quantidade || 0))} | Responsável: ${p.responsavel || "Sem responsável"} | Data: ${formatarData(p.criadoEm)}`
+        )
+        .join("\n")
+    : "Nenhuma produção registrada nessa semana."
+}
+
+RESUMO INDIVIDUAL DE PRODUÇÃO
+${
+  Object.keys(producaoPorPessoa).length
+    ? Object.entries(producaoPorPessoa).map(([nome, total]) => `${nome}: ${formatarNumero(Number(total))}`).join("\n")
+    : "Nenhum responsável com produção nessa semana."
+}
+`.trim();
+
+  const textoReembolsos = `
+RELATÓRIO SEMANAL DE REEMBOLSOS - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL DE REEMBOLSOS
+${formatarDinheiro(totalReembolsos)}
+
+REEMBOLSOS DETALHADOS
+${
+  reembolsosDetalhados.length
+    ? reembolsosDetalhados
+        .map(
+          (r) =>
+            `Nome: ${r.nome || "Sem nome"} | Item: ${r.item || "Sem item"} | Quantidade: ${formatarNumero(Number(r.quantidade || 0))} | Valor: ${formatarDinheiro(Number(r.valor || 0))} | Status: ${r.status || "Não informado"} | Data: ${formatarData(r.criadoEm)}`
+        )
+        .join("\n")
+    : "Nenhum reembolso registrado nessa semana."
+}
+
+RESUMO INDIVIDUAL DE REEMBOLSOS
+${
+  Object.keys(reembolsoPorPessoa).length
+    ? Object.entries(reembolsoPorPessoa).map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`).join("\n")
+    : "Nenhum reembolso registrado."
+}
+`.trim();
+
+  const textoAcoes = `
+RELATÓRIO SEMANAL DE AÇÕES - INGLATERRA
+
+Semana: ${formatarData(inicioSemana)} até ${formatarData(fimSemana)}
+
+TOTAL DE AÇÕES
+${formatarDinheiro(totalAcoes)}
+
+AÇÕES DETALHADAS
+${
+  acoesDetalhadas.length
+    ? acoesDetalhadas
+        .map(
+          (a) =>
+            `Ação: ${a.tipo || "Sem tipo"} | Valor: ${formatarDinheiro(Number(a.valor || 0))} | Status: ${a.status || "Não informado"} | Responsável: ${a.responsavel || "Sem responsável"} | Data: ${formatarData(a.criadoEm)}`
+        )
+        .join("\n")
+    : "Nenhuma ação registrada nessa semana."
+}
+
+RESUMO INDIVIDUAL DE AÇÕES
+${
+  Object.keys(acoesPorPessoa).length
+    ? Object.entries(acoesPorPessoa).map(([nome, total]) => `${nome}: ${formatarDinheiro(Number(total))}`).join("\n")
+    : "Nenhuma ação registrada."
+}
+`.trim();
+
+  function gerarPDF(titulo: string, texto: string, nomeArquivo: string) {
+    const pdf = new jsPDF();
+
+    pdf.setFontSize(18);
+    pdf.text(titulo, 10, 15);
+
+    pdf.setFontSize(11);
+
+    const linhas = pdf.splitTextToSize(texto, 180);
+    let y = 30;
+
+    linhas.forEach((linha: string) => {
+      if (y > 280) {
+        pdf.addPage();
+        y = 20;
+      }
+
+      pdf.text(linha, 10, y);
+      y += 7;
+    });
+
+    pdf.save(nomeArquivo);
+  }
+
+  if (carregando) {
+    return <main className="min-h-screen bg-black p-10 text-white">Carregando...</main>;
   }
 
   if (!session) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-zinc-950 text-white">
-        <div className="rounded-xl border border-zinc-800 bg-zinc-900 p-6 text-center">
-          <h1 className="text-2xl font-black text-red-500">📑 Relatórios</h1>
-          <p className="mt-2 text-zinc-400">Entre com Discord para acessar.</p>
-
-          <button
-            onClick={() => signIn("discord")}
-            className="mt-4 rounded-lg bg-red-600 px-5 py-3 font-bold hover:bg-red-500"
-          >
-            Entrar com Discord
-          </button>
-        </div>
+      <main className="min-h-screen bg-black p-10 text-white">
+        <button onClick={() => signIn("discord")} className="rounded bg-red-700 px-6 py-3 font-bold">
+          Entrar com Discord
+        </button>
       </main>
     );
   }
 
   if (!temPermissao) {
-    return (
-      <main className="min-h-screen bg-zinc-950 p-6 text-white">
-        <div className="rounded-xl border border-red-800 bg-red-950 p-6">
-          <h1 className="text-2xl font-black text-red-400">Sem permissão</h1>
-          <p className="mt-2 text-red-200">
-            Apenas líderes e gerentes podem acessar os relatórios.
-          </p>
-        </div>
-      </main>
-    );
+    return <main className="min-h-screen bg-black p-10 text-white">❌ Acesso negado</main>;
   }
 
-  const { inicio, fim } = pegarSemanaPassada();
-
   return (
-    <main className="min-h-screen bg-zinc-950 p-6 text-white">
-      <div className="mx-auto max-w-5xl">
-        <h1 className="text-3xl font-black text-red-500">
-          📑 Relatórios da Inglaterra
-        </h1>
+    <main className="min-h-screen bg-black p-10 text-white">
+      <h1 className="text-5xl font-black text-red-600">📊 RELATÓRIOS</h1>
+
+      <p className="mt-3 text-zinc-400">
+        Semana atual: {formatarData(inicioSemana)} até {formatarData(fimSemana)}
+      </p>
+
+      <div className="mt-6 rounded-xl border border-green-900 bg-zinc-950 p-6">
+        <h2 className="text-2xl font-black text-green-500">
+          📄 Relatório Geral da Semana Passada
+        </h2>
 
         <p className="mt-2 text-zinc-400">
-          Gere relatórios completos da facção em PDF.
+          Período: {formatarData(semanaAnterior.inicio)} até {formatarData(semanaAnterior.fim)}
         </p>
 
-        <div className="mt-6 rounded-xl border border-red-800 bg-zinc-900 p-6">
-          <h2 className="text-2xl font-black text-red-400">
-            📄 Relatório Geral da Semana Passada
-          </h2>
-
-          <p className="mt-2 text-zinc-300">
-            Período:{" "}
-            <span className="font-bold text-white">
-              {formatarData(inicio)} até {formatarData(fim)}
-            </span>
-          </p>
-
-          <p className="mt-3 text-sm text-zinc-400">
-            Esse PDF puxa farm aprovado, vendas, compras, produção, reembolsos,
-            ações e plantões da semana fechada.
-          </p>
-
-          <button
-            onClick={gerarRelatorioGeralSemanaPassada}
-            className="mt-5 w-full rounded-xl bg-red-600 px-6 py-4 text-lg font-black text-white hover:bg-red-500"
-          >
-            📄 Gerar Relatório Geral da Semana Passada
-          </button>
-        </div>
+        <button
+          onClick={gerarRelatorioGeralSemanaPassada}
+          className="mt-5 rounded bg-green-700 px-6 py-3 font-bold"
+        >
+          📄 Gerar Relatório Geral Completo
+        </button>
       </div>
+
+      <button
+        onClick={gerarAdvertenciasAutomaticas}
+        disabled={gerandoAdv}
+        className="mt-6 rounded bg-yellow-600 px-6 py-3 font-bold text-black disabled:opacity-50"
+      >
+        {gerandoAdv ? "Gerando advertências..." : "⚠️ Gerar Advertências Automáticas"}
+      </button>
+
+      <div className="mt-8 flex flex-wrap gap-3">
+        <BotaoAba ativo={aba === "vendas"} onClick={() => setAba("vendas")}>💰 Vendas</BotaoAba>
+        <BotaoAba ativo={aba === "compras"} onClick={() => setAba("compras")}>🛒 Compras</BotaoAba>
+        <BotaoAba ativo={aba === "producao"} onClick={() => setAba("producao")}>🏭 Produção</BotaoAba>
+        <BotaoAba ativo={aba === "reembolsos"} onClick={() => setAba("reembolsos")}>💸 Reembolsos</BotaoAba>
+        <BotaoAba ativo={aba === "acoes"} onClick={() => setAba("acoes")}>🎯 Ações</BotaoAba>
+      </div>
+
+      <RelatorioBox
+        mostrar={aba === "vendas"}
+        titulo="💰 Relatório de Vendas"
+        totalTitulo="Total de Vendas"
+        total={formatarDinheiro(totalVendas)}
+        registros={vendasDetalhadas.length}
+        texto={textoVendas}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE VENDAS", textoVendas, "relatorio-vendas-inglaterra.pdf")}
+      />
+
+      <RelatorioBox
+        mostrar={aba === "compras"}
+        titulo="🛒 Relatório de Compras"
+        totalTitulo="Total de Compras"
+        total={formatarDinheiro(totalCompras)}
+        registros={comprasDetalhadas.length}
+        texto={textoCompras}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE COMPRAS", textoCompras, "relatorio-compras-inglaterra.pdf")}
+      />
+
+      <RelatorioBox
+        mostrar={aba === "producao"}
+        titulo="🏭 Relatório de Produção"
+        totalTitulo="Total Produzido"
+        total={formatarNumero(totalProducoes)}
+        registros={producoesDetalhadas.length}
+        texto={textoProducao}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE PRODUÇÃO", textoProducao, "relatorio-producao-inglaterra.pdf")}
+      />
+
+      <RelatorioBox
+        mostrar={aba === "reembolsos"}
+        titulo="💸 Relatório de Reembolsos"
+        totalTitulo="Total de Reembolsos"
+        total={formatarDinheiro(totalReembolsos)}
+        registros={reembolsosDetalhados.length}
+        texto={textoReembolsos}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE REEMBOLSOS", textoReembolsos, "relatorio-reembolsos-inglaterra.pdf")}
+      />
+
+      <RelatorioBox
+        mostrar={aba === "acoes"}
+        titulo="🎯 Relatório de Ações"
+        totalTitulo="Total de Ações"
+        total={formatarDinheiro(totalAcoes)}
+        registros={acoesDetalhadas.length}
+        texto={textoAcoes}
+        gerar={() => gerarPDF("RELATÓRIO SEMANAL DE AÇÕES", textoAcoes, "relatorio-acoes-inglaterra.pdf")}
+      />
     </main>
+  );
+}
+
+function BotaoAba({
+  children,
+  ativo,
+  onClick,
+}: {
+  children: React.ReactNode;
+  ativo: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded px-6 py-3 font-bold ${
+        ativo ? "bg-red-700 text-white" : "bg-zinc-900 text-zinc-400"
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function Card({ titulo, valor }: { titulo: string; valor: string }) {
+  return (
+    <div className="rounded-xl border border-red-900 bg-black p-6">
+      <p className="text-zinc-400">{titulo}</p>
+      <h2 className="mt-2 text-3xl font-black text-red-500">{valor}</h2>
+    </div>
+  );
+}
+
+function RelatorioBox({
+  mostrar,
+  titulo,
+  totalTitulo,
+  total,
+  registros,
+  texto,
+  gerar,
+}: {
+  mostrar: boolean;
+  titulo: string;
+  totalTitulo: string;
+  total: string;
+  registros: number;
+  texto: string;
+  gerar: () => void;
+}) {
+  if (!mostrar) return null;
+
+  return (
+    <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
+      <h2 className="text-3xl font-bold">{titulo}</h2>
+
+      <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <Card titulo={totalTitulo} valor={total} />
+        <Card titulo="Registros" valor={String(registros)} />
+      </div>
+
+      <textarea
+        value={texto}
+        readOnly
+        className="mt-6 h-96 w-full rounded bg-black p-4 text-white"
+      />
+
+      <button onClick={gerar} className="mt-5 rounded bg-green-700 px-6 py-3 font-bold">
+        📄 Gerar PDF
+      </button>
+    </section>
   );
 }
