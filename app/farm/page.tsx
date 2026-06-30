@@ -14,10 +14,7 @@ type Membro = {
   discordId?: string;
 };
 
-function nomeExibicao(
-  membro: Membro | null,
-  sessionName?: string | null
-) {
+function nomeExibicao(membro: Membro | null, sessionName?: string | null) {
   if (!membro) return sessionName || "Sem nome";
 
   return (
@@ -30,6 +27,45 @@ function nomeExibicao(
   );
 }
 
+function converterPrint(arquivo: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => {
+      const img = new Image();
+
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+
+        const maxWidth = 900;
+        const escala = Math.min(maxWidth / img.width, 1);
+
+        canvas.width = img.width * escala;
+        canvas.height = img.height * escala;
+
+        const ctx = canvas.getContext("2d");
+
+        if (!ctx) {
+          reject("Erro ao comprimir imagem.");
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+        const imagemComprimida = canvas.toDataURL("image/jpeg", 0.45);
+
+        resolve(imagemComprimida);
+      };
+
+      img.onerror = () => reject("Erro ao carregar imagem.");
+      img.src = reader.result as string;
+    };
+
+    reader.onerror = () => reject("Erro ao ler arquivo.");
+    reader.readAsDataURL(arquivo);
+  });
+}
+
 export default function FarmPage() {
   const { data: session, status } = useSession();
 
@@ -39,17 +75,7 @@ export default function FarmPage() {
   const [agulhas, setAgulhas] = useState("");
   const [print, setPrint] = useState("");
   const [enviando, setEnviando] = useState(false);
-
-  function converterPrint(arquivo: File) {
-    const reader = new FileReader();
-
-    reader.onloadend = () => {
-      const resultado = reader.result as string;
-      setPrint(resultado);
-    };
-
-    reader.readAsDataURL(arquivo);
-  }
+  const [carregandoPrint, setCarregandoPrint] = useState(false);
 
   async function enviarFarm() {
     if (!session?.user) {
@@ -71,7 +97,6 @@ export default function FarmPage() {
       setEnviando(true);
 
       const discordId = (session.user as any).id || "";
-
       let membroCadastro: Membro | null = null;
 
       if (discordId) {
@@ -87,11 +112,11 @@ export default function FarmPage() {
         session.user.name || "Sem nome"
       );
 
-      const dadosFarm = {
+      await addDoc(collection(db, "farm"), {
         membroNome: nomeParaSalvar,
         membroEmail: session.user.email || "",
         membroId: discordId,
-        discordId: discordId,
+        discordId,
         folhas: Number(folhas || 0),
         opios: Number(opios || 0),
         seringas: Number(seringas || 0),
@@ -99,9 +124,7 @@ export default function FarmPage() {
         print,
         status: "pendente",
         criadoEm: Timestamp.now(),
-      };
-
-      await addDoc(collection(db, "farm"), dadosFarm);
+      });
 
       await fetch("/api/discord/log-farm", {
         method: "POST",
@@ -129,11 +152,7 @@ export default function FarmPage() {
       alert("Farm enviado para aprovação!");
     } catch (error: any) {
       console.error("ERRO COMPLETO:", error);
-
-      alert(
-        "ERRO REAL:\n\n" +
-          (error?.message || error?.code || JSON.stringify(error))
-      );
+      alert("ERRO REAL:\n\n" + (error?.message || error?.code || JSON.stringify(error)));
     } finally {
       setEnviando(false);
     }
@@ -168,67 +187,46 @@ export default function FarmPage() {
         <h2 className="text-3xl font-bold">Enviar Farm</h2>
 
         <div className="mt-6 grid gap-4 md:grid-cols-2">
-          <input
-            placeholder="🍃 Folhas"
-            type="number"
-            value={folhas}
-            onChange={(e) => setFolhas(e.target.value)}
-            className="rounded bg-black p-4"
-          />
-
-          <input
-            placeholder="💊 Ópios"
-            type="number"
-            value={opios}
-            onChange={(e) => setOpios(e.target.value)}
-            className="rounded bg-black p-4"
-          />
-
-          <input
-            placeholder="💉 Seringas"
-            type="number"
-            value={seringas}
-            onChange={(e) => setSeringas(e.target.value)}
-            className="rounded bg-black p-4"
-          />
-
-          <input
-            placeholder="🪡 Agulhas"
-            type="number"
-            value={agulhas}
-            onChange={(e) => setAgulhas(e.target.value)}
-            className="rounded bg-black p-4"
-          />
+          <input placeholder="🍃 Folhas" type="number" value={folhas} onChange={(e) => setFolhas(e.target.value)} className="rounded bg-black p-4" />
+          <input placeholder="💊 Ópios" type="number" value={opios} onChange={(e) => setOpios(e.target.value)} className="rounded bg-black p-4" />
+          <input placeholder="💉 Seringas" type="number" value={seringas} onChange={(e) => setSeringas(e.target.value)} className="rounded bg-black p-4" />
+          <input placeholder="🪡 Agulhas" type="number" value={agulhas} onChange={(e) => setAgulhas(e.target.value)} className="rounded bg-black p-4" />
 
           <input
             type="file"
             accept="image/*"
             className="rounded bg-black p-4 md:col-span-2"
-            onChange={(e) => {
+            onChange={async (e) => {
               const arquivo = e.target.files?.[0];
+              if (!arquivo) return;
 
-              if (arquivo) {
-                converterPrint(arquivo);
+              try {
+                setCarregandoPrint(true);
+                const imagem = await converterPrint(arquivo);
+                setPrint(imagem);
+              } catch {
+                alert("Erro ao reduzir o print. Tente outro print.");
+              } finally {
+                setCarregandoPrint(false);
               }
             }}
           />
         </div>
 
+        {carregandoPrint && (
+          <p className="mt-4 text-yellow-400">Reduzindo print...</p>
+        )}
+
         {print && (
           <div className="mt-5 w-full max-w-xl rounded border border-zinc-700 bg-black p-2">
             <p className="mb-2 text-sm text-zinc-400">Preview do print:</p>
-
-            <img
-              src={print}
-              alt="Print do farm"
-              className="max-h-80 w-full rounded object-contain"
-            />
+            <img src={print} alt="Print do farm" className="max-h-80 w-full rounded object-contain" />
           </div>
         )}
 
         <button
           onClick={enviarFarm}
-          disabled={enviando}
+          disabled={enviando || carregandoPrint}
           className="mt-6 rounded bg-red-700 px-6 py-3 font-bold disabled:opacity-50"
         >
           {enviando ? "Enviando..." : "Enviar Farm"}
