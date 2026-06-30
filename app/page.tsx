@@ -152,6 +152,11 @@ export default function Home() {
     cargoLimpo === "Gerente de Produção" ||
     cargoLimpo === "Gerente de Ações";
 
+  const podeEnviarAlertas =
+    cargoLimpo === "Líder" ||
+    cargoLimpo === "Vice-Líder" ||
+    cargoLimpo === "Gerente de Farm";
+
   const progressoFolhas = Math.min(folhasMeta, META_FOLHAS);
   const progressoOpios = Math.min(opiosMeta, META_OPIOS);
   const progressoSeringas = Math.min(seringasMeta, META_SERINGAS);
@@ -174,12 +179,6 @@ export default function Home() {
     opiosMeta >= META_OPIOS &&
     seringasMeta >= META_SERINGAS &&
     agulhasMeta >= META_AGULHAS;
-
-  const statusMeta = isElite
-    ? "ISENTO"
-    : metaCompleta
-    ? "META BATIDA"
-    : "EM ANDAMENTO";
 
   async function enviarAlertasIndividuais() {
     const confirmar = confirm(
@@ -695,56 +694,12 @@ export default function Home() {
             </div>
           </header>
 
-          <section className="grid gap-5 lg:grid-cols-4">
-            <Card titulo="🌿 Meta" valor={`${porcentagemMeta}%`} desc={statusMeta} />
-            <Card titulo="⏱️ Horas" valor={formatarMinutos(totalMinutosPlantao)} desc="Plantão total" />
-            <Card titulo="📦 Farms" valor={String(farmsPendentes)} desc="Pendentes" />
-            <Card titulo="💸 Reembolsos" valor={String(reembolsosPendentes)} desc="Pendentes" />
-          </section>
-
-          <section className="rounded-3xl border border-red-900 bg-black/80 p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-black text-red-500">
-                  🧠 IA DA INGLATERRA
-                </h2>
-
-                <p className="text-zinc-500">
-                  Inteligência operacional da facção
-                </p>
-              </div>
-
-              <span className="rounded-full bg-green-700 px-4 py-2 text-sm font-black">
-                EM OPERAÇÃO
-              </span>
-            </div>
-
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-                <h3 className="font-black text-red-400">Situação de Hoje</h3>
-
-                <ul className="mt-4 space-y-3 text-zinc-300">
-                  <li>• Sua meta semanal está em {porcentagemMeta}%</li>
-                  <li>• Status da meta: {statusMeta}</li>
-                  <li>• Farms pendentes: {farmsPendentes}</li>
-                  <li>• Reembolsos pendentes: {reembolsosPendentes}</li>
-                  <li>• Cadastros pendentes: {cadastrosPendentes}</li>
-                  <li>• Horas registradas: {formatarMinutos(totalMinutosPlantao)}</li>
-                </ul>
-              </div>
-
-              <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
-                <h3 className="font-black text-green-400">Recomendações</h3>
-
-                <ul className="mt-4 space-y-3 text-zinc-300">
-                  {farmsPendentes > 0 && <li>✔ Conferir farms pendentes</li>}
-                  {reembolsosPendentes > 0 && <li>✔ Verificar reembolsos em aberto</li>}
-                  {!isElite && porcentagemMeta < 100 && <li>✔ Acompanhar meta até domingo 23:59</li>}
-                  {cadastrosPendentes > 0 && <li>✔ Aprovar cadastros pendentes</li>}
-                  {isElite && <li>✔ Elite/Gerente de Ações está isento de meta</li>}
-                </ul>
-              </div>
-            </div>
+          <section className="grid gap-5">
+            <Card
+              titulo="⏱️ Horas"
+              valor={formatarMinutos(totalMinutosPlantao)}
+              desc="Plantão total"
+            />
           </section>
 
           {!isElite && (
@@ -775,8 +730,16 @@ export default function Home() {
               <div className="mt-5 grid gap-3 md:grid-cols-4">
                 <MiniMeta nome="Folhas" atual={folhasMeta} meta={META_FOLHAS} />
                 <MiniMeta nome="Ópios" atual={opiosMeta} meta={META_OPIOS} />
-                <MiniMeta nome="Seringas" atual={seringasMeta} meta={META_SERINGAS} />
-                <MiniMeta nome="Agulhas" atual={agulhasMeta} meta={META_AGULHAS} />
+                <MiniMeta
+                  nome="Seringas"
+                  atual={seringasMeta}
+                  meta={META_SERINGAS}
+                />
+                <MiniMeta
+                  nome="Agulhas"
+                  atual={agulhasMeta}
+                  meta={META_AGULHAS}
+                />
               </div>
             </section>
           )}
@@ -794,50 +757,26 @@ export default function Home() {
             </section>
           )}
 
-          {podeVerAdmin && (
-            <section className="rounded-3xl border border-red-900 bg-black/80 p-6">
-              <h2 className="mb-4 text-2xl font-black text-red-500">
-                ⚠️ Central da Gerência
-              </h2>
+          {podeEnviarAlertas && (
+            <section className="rounded-3xl border border-yellow-700 bg-yellow-950/20 p-6 text-center">
+              <h3 className="text-xl font-black text-yellow-400">
+                📩 Alertas Individuais
+              </h3>
 
-              <div className="grid gap-4 md:grid-cols-3">
-                <Link href="/admin">
-                  <Card titulo="Cadastros" valor={String(cadastrosPendentes)} desc="Pendentes" />
-                </Link>
+              <p className="mt-2 text-sm text-zinc-400">
+                Envia DM para quem não bateu meta, quem não se cadastrou e
+                parabéns para quem bateu.
+              </p>
 
-                <Link href="/admin">
-                  <Card titulo="Farms" valor={String(farmsPendentes)} desc="Pendentes" />
-                </Link>
-
-                <Link href="/reembolso">
-                  <Card titulo="Reembolsos" valor={String(reembolsosPendentes)} desc="Pendentes" />
-                </Link>
-              </div>
-
-              {(cargoLimpo === "Líder" ||
-                cargoLimpo === "Vice-Líder" ||
-                cargoLimpo === "Gerente de Farm") && (
-                <div className="mt-5 rounded-2xl border border-yellow-700 bg-yellow-950/20 p-5 text-center">
-                  <h3 className="text-xl font-black text-yellow-400">
-                    📩 Alertas Individuais
-                  </h3>
-
-                  <p className="mt-2 text-sm text-zinc-400">
-                    Envia DM para quem não bateu meta, quem não se cadastrou e
-                    parabéns para quem bateu.
-                  </p>
-
-                  <button
-                    onClick={enviarAlertasIndividuais}
-                    disabled={enviandoAlertas}
-                    className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
-                  >
-                    {enviandoAlertas
-                      ? "Enviando alertas..."
-                      : "📩 Enviar Alertas Individuais"}
-                  </button>
-                </div>
-              )}
+              <button
+                onClick={enviarAlertasIndividuais}
+                disabled={enviandoAlertas}
+                className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
+              >
+                {enviandoAlertas
+                  ? "Enviando alertas..."
+                  : "📩 Enviar Alertas Individuais"}
+              </button>
             </section>
           )}
         </section>
@@ -877,7 +816,9 @@ export default function Home() {
             <h3 className="text-lg font-black text-red-500">📢 Avisos</h3>
 
             {avisos.length === 0 && (
-              <p className="mt-4 text-zinc-400">Nenhum aviso publicado ainda.</p>
+              <p className="mt-4 text-zinc-400">
+                Nenhum aviso publicado ainda.
+              </p>
             )}
 
             <div className="mt-4 grid gap-3">
