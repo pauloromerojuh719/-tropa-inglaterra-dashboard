@@ -43,6 +43,7 @@ type Farm = {
   seringas: number;
   agulhas: number;
   status: string;
+  criadoEm?: any;
 };
 
 type Reembolso = {
@@ -69,6 +70,19 @@ function nomeExibicao(membro: Membro | null) {
     membro.username ||
     "Sem nome"
   );
+}
+
+function inicioDaSemanaAtual() {
+  const hoje = new Date();
+  const dia = hoje.getDay();
+
+  const diferenca = dia === 0 ? 6 : dia - 1;
+
+  const inicio = new Date(hoje);
+  inicio.setDate(hoje.getDate() - diferenca);
+  inicio.setHours(0, 0, 0, 0);
+
+  return Timestamp.fromDate(inicio);
 }
 
 export default function Home() {
@@ -111,7 +125,9 @@ export default function Home() {
   const progressoFolhas = Math.min(folhasMeta, 2000);
   const progressoOpios = Math.min(opiosMeta, 2000);
   const progressoSeringas = Math.min(seringasMeta, 800);
-  const progressoAgulhas = Math.min(agulhasMeta, 800);  const totalFarm =
+  const progressoAgulhas = Math.min(agulhasMeta, 800);
+
+  const totalFarm =
     progressoFolhas +
     progressoOpios +
     progressoSeringas +
@@ -133,9 +149,7 @@ export default function Home() {
     ? "ISENTO"
     : metaCompleta
     ? "META BATIDA"
-    : "EM ANDAMENTO";
-
-  function formatarMinutos(minutos: number) {
+    : "EM ANDAMENTO";  function formatarMinutos(minutos: number) {
     const horas = Math.floor(minutos / 60);
     const mins = minutos % 60;
     return `${horas}h ${mins}m`;
@@ -184,18 +198,18 @@ export default function Home() {
     const reembolsoSnap = await getDocs(collection(db, "reembolsos"));
 
     const totalCadastros = membrosSnap.docs.filter((item) => {
-      const membro = item.data() as Membro;
-      return membro.status === "pendente";
+      const dados = item.data() as Membro;
+      return dados.status === "pendente";
     }).length;
 
     const totalFarms = farmSnap.docs.filter((item) => {
-      const farm = item.data() as Farm;
-      return farm.status === "pendente";
+      const dados = item.data() as Farm;
+      return dados.status === "pendente";
     }).length;
 
     const totalReembolsos = reembolsoSnap.docs.filter((item) => {
-      const reembolso = item.data() as Reembolso;
-      return reembolso.status === "pendente";
+      const dados = item.data() as Reembolso;
+      return dados.status === "pendente";
     }).length;
 
     setCadastrosPendentes(totalCadastros);
@@ -226,7 +240,9 @@ export default function Home() {
       .reduce((soma, p) => soma + (p.minutos || 0), 0);
 
     setTotalMinutosPlantao(total);
-  }  async function iniciarPlantao() {
+  }
+
+  async function iniciarPlantao() {
     if (!session?.user || !membro) return;
 
     if (plantaoAberto) {
@@ -312,16 +328,20 @@ export default function Home() {
       } else {
         setAvisos([]);
       }
-    }
-
-    async function buscarMinhaMeta() {
+    }    async function buscarMinhaMeta() {
       if (!session?.user) return;
 
       const discordId = (session.user as any).id;
       if (!discordId) return;
 
+      const inicioSemana = inicioDaSemanaAtual();
+
       const snapshot = await getDocs(
-        query(collection(db, "farm"), where("status", "==", "aprovado"))
+        query(
+          collection(db, "farm"),
+          where("status", "==", "aprovado"),
+          where("criadoEm", ">=", inicioSemana)
+        )
       );
 
       let minhasFolhas = 0;
@@ -382,7 +402,9 @@ export default function Home() {
 
     setMembro(membroAtualizado);
     alert("Solicitação enviada! Aguarde aprovação.");
-  }  if (!session) {
+  }
+
+  if (!session) {
     return (
       <main className="min-h-screen bg-black">
         <div className="mx-auto max-w-7xl p-6">
@@ -420,51 +442,96 @@ export default function Home() {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="w-full max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8">
-          <Image src="/logo.png" alt="Tropa da Inglaterra" width={130} height={130} className="mx-auto rounded-full" />
+          <Image
+            src="/logo.png"
+            alt="Tropa da Inglaterra"
+            width={130}
+            height={130}
+            className="mx-auto rounded-full"
+          />
 
           <h1 className="mt-6 text-center text-4xl font-black text-red-600">
             CADASTRO NA INGLATERRA
           </h1>
 
           <p className="mt-4 text-center text-zinc-400">
-            Discord: <strong>{membro.nomeDiscord || membro.nome || membro.username || "Sem nome"}</strong>
+            Discord:{" "}
+            <strong>
+              {membro.nomeDiscord || membro.nome || membro.username || "Sem nome"}
+            </strong>
           </p>
 
-          <input value={nomeRP} onChange={(e) => setNomeRP(e.target.value)} placeholder="Nome RP na cidade" className="mt-6 w-full rounded bg-black p-4" />
-          <input value={passaporte} onChange={(e) => setPassaporte(e.target.value)} placeholder="Passaporte" className="mt-4 w-full rounded bg-black p-4" />
-          <input value={numeroBau} onChange={(e) => setNumeroBau(e.target.value)} placeholder="Número do Baú" className="mt-4 w-full rounded bg-black p-4" />
+          <input
+            value={nomeRP}
+            onChange={(e) => setNomeRP(e.target.value)}
+            placeholder="Nome RP na cidade"
+            className="mt-6 w-full rounded bg-black p-4"
+          />
 
-          <button onClick={solicitarEntrada} className="mt-6 w-full rounded-xl bg-red-700 px-6 py-4 font-bold hover:bg-red-600">
+          <input
+            value={passaporte}
+            onChange={(e) => setPassaporte(e.target.value)}
+            placeholder="Passaporte"
+            className="mt-4 w-full rounded bg-black p-4"
+          />
+
+          <input
+            value={numeroBau}
+            onChange={(e) => setNumeroBau(e.target.value)}
+            placeholder="Número do Baú"
+            className="mt-4 w-full rounded bg-black p-4"
+          />
+
+          <button
+            onClick={solicitarEntrada}
+            className="mt-6 w-full rounded-xl bg-red-700 px-6 py-4 font-bold hover:bg-red-600"
+          >
             Solicitar Entrada
           </button>
 
-          <button onClick={() => signOut()} className="mt-3 w-full rounded-xl border border-red-900 px-6 py-3 font-bold">
+          <button
+            onClick={() => signOut()}
+            className="mt-3 w-full rounded-xl border border-red-900 px-6 py-3 font-bold"
+          >
             Sair
           </button>
         </div>
       </main>
     );
-  }
-
-  if (membro.status === "pendente") {
+  }  if (membro.status === "pendente") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8 text-center">
-          <Image src="/logo.png" alt="Tropa da Inglaterra" width={140} height={140} className="mx-auto rounded-full" />
+          <Image
+            src="/logo.png"
+            alt="Tropa da Inglaterra"
+            width={140}
+            height={140}
+            className="mx-auto rounded-full"
+          />
 
           <h1 className="mt-6 text-4xl font-black text-red-600">
             AGUARDANDO APROVAÇÃO
           </h1>
 
-          <p className="mt-4 text-xl">Nome RP: <strong>{membro.nomeRP}</strong></p>
-          <p className="mt-2 text-xl">Passaporte: <strong>{membro.passaporte}</strong></p>
-          <p className="mt-2 text-xl">Baú: <strong>{membro.numeroBau}</strong></p>
+          <p className="mt-4 text-xl">
+            Nome RP: <strong>{membro.nomeRP}</strong>
+          </p>
+          <p className="mt-2 text-xl">
+            Passaporte: <strong>{membro.passaporte}</strong>
+          </p>
+          <p className="mt-2 text-xl">
+            Baú: <strong>{membro.numeroBau}</strong>
+          </p>
 
           <p className="mt-4 text-zinc-400">
             Aguarde um Gerente, Vice-Líder ou Líder aprovar seu acesso.
           </p>
 
-          <button onClick={() => signOut()} className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-bold hover:bg-red-600">
+          <button
+            onClick={() => signOut()}
+            className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
+          >
             Sair
           </button>
         </div>
@@ -475,45 +542,93 @@ export default function Home() {
   return (
     <main className="min-h-screen bg-black p-5 text-white">
       <section className="mx-auto max-w-7xl">
-        <Image src="/banner.png" alt="Tropa da Inglaterra" width={1400} height={700} className="mb-5 w-full rounded-2xl border border-red-900" priority />
+        <Image
+          src="/banner.png"
+          alt="Tropa da Inglaterra"
+          width={1400}
+          height={700}
+          className="mb-5 w-full rounded-2xl border border-red-900"
+          priority
+        />
 
         <section className="mt-5 grid gap-5 md:grid-cols-[280px_1fr]">
           <aside className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
             <div className="mb-8 text-center">
-              <Image src="/logo.png" alt="Logo" width={130} height={130} className="mx-auto rounded-full" />
-              <p className="mt-3 text-xl font-black text-red-500">TROPA DA INGLATERRA</p>
+              <Image
+                src="/logo.png"
+                alt="Logo"
+                width={130}
+                height={130}
+                className="mx-auto rounded-full"
+              />
+              <p className="mt-3 text-xl font-black text-red-500">
+                TROPA DA INGLATERRA
+              </p>
             </div>
 
             <nav className="space-y-2">
-              <Link href="/" className="block rounded-lg bg-red-800 px-4 py-3 font-bold">🏠 INÍCIO</Link>
-              <Link href="/metas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">🎯 METAS</Link>
-              <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">📦 FARM</Link>
+              <Link href="/" className="block rounded-lg bg-red-800 px-4 py-3 font-bold">
+                🏠 INÍCIO
+              </Link>
+              <Link href="/metas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                🎯 METAS
+              </Link>
+              <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                📦 FARM
+              </Link>
 
               {podeVerAdmin && (
                 <>
-                  <Link href="/controle-farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">🌿 CONTROLE FARM</Link>
-                  <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">🛒 COMPRAS</Link>
-                  <Link href="/contatos" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">📞 CONTATOS</Link>
-                  <Link href="/programacao-semanal" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">📅 PROGRAMAÇÃO</Link>
-                  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">💰 VENDAS</Link>
-                  <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">🏭 PRODUÇÃO</Link>
-                  <Link href="/reembolso" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">💸 REEMBOLSO</Link>
+                  <Link href="/controle-farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🌿 CONTROLE FARM
+                  </Link>
+                  <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🛒 COMPRAS
+                  </Link>
+                  <Link href="/contatos" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    📞 CONTATOS
+                  </Link>
+                  <Link href="/programacao-semanal" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    📅 PROGRAMAÇÃO
+                  </Link>
+                  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    💰 VENDAS
+                  </Link>
+                  <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🏭 PRODUÇÃO
+                  </Link>
+                  <Link href="/reembolso" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    💸 REEMBOLSO
+                  </Link>
                 </>
               )}
 
-              <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">🏆 RANKING</Link>
-              <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">👥 MEMBROS</Link>
+              <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                🏆 RANKING
+              </Link>
+              <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                👥 MEMBROS
+              </Link>
 
               {podeVerAdmin && (
                 <>
-                  <Link href="/acoes" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">🎯 AÇÕES</Link>
-                  <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">📊 RELATÓRIO</Link>
-                  <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">⚙️ ADMIN</Link>
+                  <Link href="/acoes" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    🎯 AÇÕES
+                  </Link>
+                  <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    📊 RELATÓRIO
+                  </Link>
+                  <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
+                    ⚙️ ADMIN
+                  </Link>
                 </>
               )}
             </nav>
 
-            <button onClick={() => signOut()} className="mt-6 w-full rounded-xl bg-red-700 px-4 py-3 font-bold hover:bg-red-600">
+            <button
+              onClick={() => signOut()}
+              className="mt-6 w-full rounded-xl bg-red-700 px-4 py-3 font-bold hover:bg-red-600"
+            >
               Sair
             </button>
           </aside>
@@ -523,22 +638,42 @@ export default function Home() {
               <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
                 <div>
                   <p className="font-black text-red-500">BEM-VINDO(A)!</p>
-                  <h3 className="mt-2 text-3xl font-black">{nomeExibicao(membro)}</h3>
-                  <p className="mt-2 text-zinc-400">Passaporte: {membro.passaporte || "Não informado"}</p>
-                  <p className="mt-1 text-zinc-400">Baú: {membro.numeroBau || "Não informado"}</p>
-                  <span className="mt-3 inline-block rounded-full bg-red-800 px-4 py-1 text-sm">{membro.cargo}</span>
+                  <h3 className="mt-2 text-3xl font-black">
+                    {nomeExibicao(membro)}
+                  </h3>
+                  <p className="mt-2 text-zinc-400">
+                    Passaporte: {membro.passaporte || "Não informado"}
+                  </p>
+                  <p className="mt-1 text-zinc-400">
+                    Baú: {membro.numeroBau || "Não informado"}
+                  </p>
+                  <span className="mt-3 inline-block rounded-full bg-red-800 px-4 py-1 text-sm">
+                    {membro.cargo}
+                  </span>
                 </div>
 
                 <div className="rounded-xl border border-red-900 bg-zinc-950 p-4 text-center">
-                  <p className="text-sm font-bold text-zinc-400">REGISTRO DE HORAS</p>
-                  <p className="mt-2 text-xl font-black">{plantaoAberto ? "🟢 Em plantão" : "⚪ Fora da cidade"}</p>
+                  <p className="text-sm font-bold text-zinc-400">
+                    REGISTRO DE HORAS
+                  </p>
+                  <p className="mt-2 text-xl font-black">
+                    {plantaoAberto ? "🟢 Em plantão" : "⚪ Fora da cidade"}
+                  </p>
 
                   <div className="mt-4 flex gap-3">
-                    <button onClick={iniciarPlantao} disabled={!!plantaoAberto} className="rounded-lg bg-green-700 px-5 py-3 font-bold text-white hover:bg-green-600 disabled:opacity-40">
+                    <button
+                      onClick={iniciarPlantao}
+                      disabled={!!plantaoAberto}
+                      className="rounded-lg bg-green-700 px-5 py-3 font-bold text-white hover:bg-green-600 disabled:opacity-40"
+                    >
                       🟢 Entrada
                     </button>
 
-                    <button onClick={encerrarPlantao} disabled={!plantaoAberto} className="rounded-lg bg-red-700 px-5 py-3 font-bold text-white hover:bg-red-600 disabled:opacity-40">
+                    <button
+                      onClick={encerrarPlantao}
+                      disabled={!plantaoAberto}
+                      className="rounded-lg bg-red-700 px-5 py-3 font-bold text-white hover:bg-red-600 disabled:opacity-40"
+                    >
                       🔴 Saída
                     </button>
                   </div>
@@ -547,14 +682,22 @@ export default function Home() {
             </div>
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <Card titulo="HORAS NA CIDADE" valor={formatarMinutos(totalMinutosPlantao)} desc="TOTAL REGISTRADO" />
+              <Card
+                titulo="HORAS NA CIDADE"
+                valor={formatarMinutos(totalMinutosPlantao)}
+                desc="TOTAL REGISTRADO"
+              />
 
               {!isElite && (
-                <Card titulo="STATUS DA META" valor={`${porcentagemMeta}%`} desc={statusMeta} />
+                <Card
+                  titulo="STATUS DA META"
+                  valor={`${porcentagemMeta}%`}
+                  desc={statusMeta}
+                />
               )}
             </div>
 
-           {podeVerAdmin && (
+            {podeVerAdmin && (
               <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
                 <h2 className="mb-4 text-2xl font-black text-red-500">
                   ⚠️ PENDÊNCIAS DA GERÊNCIA
@@ -562,55 +705,79 @@ export default function Home() {
 
                 <div className="grid gap-4 md:grid-cols-3">
                   <Link href="/admin">
-                    <Card titulo="CADASTROS PENDENTES" valor={String(cadastrosPendentes)} desc="AGUARDANDO APROVAÇÃO" />
+                    <Card
+                      titulo="CADASTROS PENDENTES"
+                      valor={String(cadastrosPendentes)}
+                      desc="AGUARDANDO APROVAÇÃO"
+                    />
                   </Link>
 
                   <Link href="/admin">
-                    <Card titulo="FARMS PENDENTES" valor={String(farmsPendentes)} desc="AGUARDANDO APROVAÇÃO" />
+                    <Card
+                      titulo="FARMS PENDENTES"
+                      valor={String(farmsPendentes)}
+                      desc="AGUARDANDO APROVAÇÃO"
+                    />
                   </Link>
 
                   <Link href="/reembolso">
-                    <Card titulo="REEMBOLSOS PENDENTES" valor={String(reembolsosPendentes)} desc="AGUARDANDO PAGAMENTO" />
+                    <Card
+                      titulo="REEMBOLSOS PENDENTES"
+                      valor={String(reembolsosPendentes)}
+                      desc="AGUARDANDO PAGAMENTO"
+                    />
                   </Link>
                 </div>
 
                 {(cargoLimpo === "Líder" ||
-  cargoLimpo === "Vice-Líder" ||
-  cargoLimpo === "Gerente de Farm") && (
-  <div className="mt-5 rounded-xl border border-yellow-700 bg-zinc-950 p-5 text-center">
-    <h3 className="text-xl font-black text-yellow-400">
-      📩 ALERTAS INDIVIDUAIS
-    </h3>
+                  cargoLimpo === "Vice-Líder" ||
+                  cargoLimpo === "Gerente de Farm") && (
+                  <div className="mt-5 rounded-xl border border-yellow-700 bg-zinc-950 p-5 text-center">
+                    <h3 className="text-xl font-black text-yellow-400">
+                      📩 ALERTAS INDIVIDUAIS
+                    </h3>
 
-    <p className="mt-2 text-sm text-zinc-400">
-      Envia DM para quem não bateu meta, quem não se cadastrou e parabéns para quem bateu.
-    </p>
+                    <p className="mt-2 text-sm text-zinc-400">
+                      Envia DM para quem não bateu meta, quem não se cadastrou e
+                      parabéns para quem bateu.
+                    </p>
 
-    <button
-      onClick={enviarAlertasIndividuais}
-      disabled={enviandoAlertas}
-      className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
-    >
-      {enviandoAlertas
-        ? "Enviando alertas..."
-        : "📩 Enviar Alertas Individuais"}
-    </button>
-  </div>
-)}
-
-</section>
-)}
+                    <button
+                      onClick={enviarAlertasIndividuais}
+                      disabled={enviandoAlertas}
+                      className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
+                    >
+                      {enviandoAlertas
+                        ? "Enviando alertas..."
+                        : "📩 Enviar Alertas Individuais"}
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
 
             {!isElite && (
               <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-                <h2 className="text-2xl font-black text-red-500">🎯 META SEMANAL</h2>
+                <h2 className="text-2xl font-black text-red-500">
+                  🎯 MINHA META SEMANAL
+                </h2>
 
                 <p className="mt-4 text-center text-6xl font-black text-green-400">
                   {porcentagemMeta}%
                 </p>
 
                 <div className="mt-5 h-5 w-full overflow-hidden rounded-full bg-zinc-800">
-                  <div className="h-5 bg-green-500 transition-all" style={{ width: `${porcentagemMeta}%` }} />
+                  <div
+                    className="h-5 bg-green-500 transition-all"
+                    style={{ width: `${porcentagemMeta}%` }}
+                  />
+                </div>
+
+                <div className="mt-5 grid gap-3 md:grid-cols-4">
+                  <Card titulo="FOLHAS" valor={`${folhasMeta}/2000`} desc="META SEMANAL" />
+                  <Card titulo="ÓPIOS" valor={`${opiosMeta}/2000`} desc="META SEMANAL" />
+                  <Card titulo="SERINGAS" valor={`${seringasMeta}/800`} desc="META SEMANAL" />
+                  <Card titulo="AGULHAS" valor={`${agulhasMeta}/800`} desc="META SEMANAL" />
                 </div>
 
                 <p className="mt-4 text-center text-xl font-bold text-zinc-300">
@@ -621,15 +788,20 @@ export default function Home() {
 
             {isElite && (
               <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-                <h2 className="text-2xl font-black text-red-500">⚔️ ELITE DE AÇÕES</h2>
+                <h2 className="text-2xl font-black text-red-500">
+                  ⚔️ ELITE DE AÇÕES
+                </h2>
                 <p className="mt-3 text-zinc-300">
-                  Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
+                  Você está marcado como Elite/Gerente de Ações e não precisa bater
+                  meta de farm semanal.
                 </p>
               </section>
             )}
 
             <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-              <h2 className="mb-4 text-2xl font-black text-red-500">📢 AVISOS DA INGLATERRA</h2>
+              <h2 className="mb-4 text-2xl font-black text-red-500">
+                📢 AVISOS DA INGLATERRA
+              </h2>
 
               {avisos.length === 0 && (
                 <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>
@@ -637,7 +809,10 @@ export default function Home() {
 
               <div className="grid gap-3">
                 {avisos.map((aviso) => (
-                  <div key={aviso.id} className="rounded-lg border border-zinc-800 bg-zinc-950 p-4">
+                  <div
+                    key={aviso.id}
+                    className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
+                  >
                     <p className="text-zinc-200">{aviso.texto}</p>
                   </div>
                 ))}
