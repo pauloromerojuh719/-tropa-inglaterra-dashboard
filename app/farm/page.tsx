@@ -14,13 +14,16 @@ type Membro = {
   discordId?: string;
 };
 
-function nomeExibicao(membro: Membro | null, sessionName?: string | null) {
+function nomeExibicao(
+  membro: Membro | null,
+  sessionName?: string | null
+) {
   if (!membro) return sessionName || "Sem nome";
 
   return (
     membro.nomeRP ||
-    membro.nomeDiscord ||
     membro.nome ||
+    membro.nomeDiscord ||
     membro.username ||
     sessionName ||
     "Sem nome"
