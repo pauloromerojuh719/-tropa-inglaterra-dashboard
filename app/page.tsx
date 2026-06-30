@@ -17,6 +17,12 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./lib/firebase";
+import PanelShell from "./components/PanelShell";
+import HomeHeader from "./components/HomeHeader";
+import StatusCidade from "./components/StatusCidade";
+import DashboardCard from "./components/Card";
+import MiniMetaCard from "./components/MiniMeta";
+import Sidebar from "./components/Sidebar";
 
 type Membro = {
   nome: string;
@@ -75,7 +81,6 @@ function nomeExibicao(membro: Membro | null) {
 function inicioDaSemanaAtual() {
   const hoje = new Date();
   const dia = hoje.getDay();
-
   const diferenca = dia === 0 ? 6 : dia - 1;
 
   const inicio = new Date(hoje);
@@ -83,6 +88,12 @@ function inicioDaSemanaAtual() {
   inicio.setHours(0, 0, 0, 0);
 
   return Timestamp.fromDate(inicio);
+}
+
+function formatarMinutos(minutos: number) {
+  const horas = Math.floor(minutos / 60);
+  const mins = minutos % 60;
+  return `${horas}h ${mins}m`;
 }
 
 export default function Home() {
@@ -133,7 +144,7 @@ export default function Home() {
     progressoSeringas +
     progressoAgulhas;
 
-  const totalMeta = 2000 + 2000 + 800 + 800;
+  const totalMeta = 5600;
 
   const porcentagemMeta = isElite
     ? 100
@@ -149,13 +160,7 @@ export default function Home() {
     ? "ISENTO"
     : metaCompleta
     ? "META BATIDA"
-    : "EM ANDAMENTO";  function formatarMinutos(minutos: number) {
-    const horas = Math.floor(minutos / 60);
-    const mins = minutos % 60;
-    return `${horas}h ${mins}m`;
-  }
-
-  async function enviarAlertasIndividuais() {
+    : "EM ANDAMENTO";  async function enviarAlertasIndividuais() {
     const confirmar = confirm(
       "Tem certeza que deseja enviar os alertas individuais por DM no Discord?"
     );
@@ -197,24 +202,26 @@ export default function Home() {
     const farmSnap = await getDocs(collection(db, "farm"));
     const reembolsoSnap = await getDocs(collection(db, "reembolsos"));
 
-    const totalCadastros = membrosSnap.docs.filter((item) => {
-      const dados = item.data() as Membro;
-      return dados.status === "pendente";
-    }).length;
+    setCadastrosPendentes(
+      membrosSnap.docs.filter((item) => {
+        const dados = item.data() as Membro;
+        return dados.status === "pendente";
+      }).length
+    );
 
-    const totalFarms = farmSnap.docs.filter((item) => {
-      const dados = item.data() as Farm;
-      return dados.status === "pendente";
-    }).length;
+    setFarmsPendentes(
+      farmSnap.docs.filter((item) => {
+        const dados = item.data() as Farm;
+        return dados.status === "pendente";
+      }).length
+    );
 
-    const totalReembolsos = reembolsoSnap.docs.filter((item) => {
-      const dados = item.data() as Reembolso;
-      return dados.status === "pendente";
-    }).length;
-
-    setCadastrosPendentes(totalCadastros);
-    setFarmsPendentes(totalFarms);
-    setReembolsosPendentes(totalReembolsos);
+    setReembolsosPendentes(
+      reembolsoSnap.docs.filter((item) => {
+        const dados = item.data() as Reembolso;
+        return dados.status === "pendente";
+      }).length
+    );
   }
 
   async function buscarPlantoes() {
@@ -318,13 +325,7 @@ export default function Home() {
 
       if (avisoSnap.exists()) {
         const dados = avisoSnap.data() as Omit<Aviso, "id">;
-
-        setAvisos([
-          {
-            id: "principal",
-            texto: dados.texto,
-          },
-        ]);
+        setAvisos([{ id: "principal", texto: dados.texto }]);
       } else {
         setAvisos([]);
       }
@@ -413,14 +414,14 @@ export default function Home() {
             alt="Tropa da Inglaterra"
             width={1400}
             height={700}
-            className="w-full rounded-2xl border border-red-900"
+            className="w-full rounded-2xl border border-red-900 shadow-2xl shadow-red-950/40"
             priority
           />
 
           <div className="mt-8 flex justify-center">
             <button
               onClick={() => signIn("discord")}
-              className="rounded-xl bg-red-700 px-10 py-5 text-xl font-bold text-white hover:bg-red-600"
+              className="rounded-xl bg-red-700 px-10 py-5 text-xl font-black text-white shadow-lg shadow-red-950/50 hover:bg-red-600"
             >
               🎮 ENTRAR COM DISCORD
             </button>
@@ -433,7 +434,7 @@ export default function Home() {
   if (!membro) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
-        <h1 className="text-4xl">Carregando...</h1>
+        <h1 className="text-4xl font-black text-red-500">Carregando...</h1>
       </main>
     );
   }
@@ -441,7 +442,7 @@ export default function Home() {
   if (membro.status === "cadastro") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
-        <div className="w-full max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8">
+        <div className="w-full max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8 shadow-2xl shadow-red-950/40">
           <Image
             src="/logo.png"
             alt="Tropa da Inglaterra"
@@ -465,33 +466,33 @@ export default function Home() {
             value={nomeRP}
             onChange={(e) => setNomeRP(e.target.value)}
             placeholder="Nome RP na cidade"
-            className="mt-6 w-full rounded bg-black p-4"
+            className="mt-6 w-full rounded-xl border border-red-950 bg-black p-4 outline-none focus:border-red-600"
           />
 
           <input
             value={passaporte}
             onChange={(e) => setPassaporte(e.target.value)}
             placeholder="Passaporte"
-            className="mt-4 w-full rounded bg-black p-4"
+            className="mt-4 w-full rounded-xl border border-red-950 bg-black p-4 outline-none focus:border-red-600"
           />
 
           <input
             value={numeroBau}
             onChange={(e) => setNumeroBau(e.target.value)}
             placeholder="Número do Baú"
-            className="mt-4 w-full rounded bg-black p-4"
+            className="mt-4 w-full rounded-xl border border-red-950 bg-black p-4 outline-none focus:border-red-600"
           />
 
           <button
             onClick={solicitarEntrada}
-            className="mt-6 w-full rounded-xl bg-red-700 px-6 py-4 font-bold hover:bg-red-600"
+            className="mt-6 w-full rounded-xl bg-red-700 px-6 py-4 font-black hover:bg-red-600"
           >
             Solicitar Entrada
           </button>
 
           <button
             onClick={() => signOut()}
-            className="mt-3 w-full rounded-xl border border-red-900 px-6 py-3 font-bold"
+            className="mt-3 w-full rounded-xl border border-red-900 px-6 py-3 font-black"
           >
             Sair
           </button>
@@ -501,37 +502,22 @@ export default function Home() {
   }  if (membro.status === "pendente") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
-        <div className="max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8 text-center">
-          <Image
-            src="/logo.png"
-            alt="Tropa da Inglaterra"
-            width={140}
-            height={140}
-            className="mx-auto rounded-full"
-          />
+        <div className="max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8 text-center shadow-2xl shadow-red-950/40">
+          <Image src="/logo.png" alt="Tropa da Inglaterra" width={140} height={140} className="mx-auto rounded-full" />
 
           <h1 className="mt-6 text-4xl font-black text-red-600">
             AGUARDANDO APROVAÇÃO
           </h1>
 
-          <p className="mt-4 text-xl">
-            Nome RP: <strong>{membro.nomeRP}</strong>
-          </p>
-          <p className="mt-2 text-xl">
-            Passaporte: <strong>{membro.passaporte}</strong>
-          </p>
-          <p className="mt-2 text-xl">
-            Baú: <strong>{membro.numeroBau}</strong>
-          </p>
+          <p className="mt-4 text-xl">Nome RP: <strong>{membro.nomeRP}</strong></p>
+          <p className="mt-2 text-xl">Passaporte: <strong>{membro.passaporte}</strong></p>
+          <p className="mt-2 text-xl">Baú: <strong>{membro.numeroBau}</strong></p>
 
           <p className="mt-4 text-zinc-400">
             Aguarde um Gerente, Vice-Líder ou Líder aprovar seu acesso.
           </p>
 
-          <button
-            onClick={() => signOut()}
-            className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-bold hover:bg-red-600"
-          >
+          <button onClick={() => signOut()} className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-black hover:bg-red-600">
             Sair
           </button>
         </div>
@@ -540,279 +526,152 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-black p-5 text-white">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#3b0505_0%,#050505_35%,#000_100%)] p-5 text-white">
       <section className="mx-auto max-w-7xl">
-        <Image
-          src="/banner.png"
-          alt="Tropa da Inglaterra"
-          width={1400}
-          height={700}
-          className="mb-5 w-full rounded-2xl border border-red-900"
-          priority
-        />
+        <Image src="/banner.png" alt="Tropa da Inglaterra" width={1400} height={700} className="mb-5 w-full rounded-3xl border border-red-900 shadow-2xl shadow-red-950/50" priority />
 
-        <section className="mt-5 grid gap-5 md:grid-cols-[280px_1fr]">
-          <aside className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-            <div className="mb-8 text-center">
-              <Image
-                src="/logo.png"
-                alt="Logo"
-                width={130}
-                height={130}
-                className="mx-auto rounded-full"
-              />
-              <p className="mt-3 text-xl font-black text-red-500">
-                TROPA DA INGLATERRA
-              </p>
+        <section className="grid gap-5 md:grid-cols-[290px_1fr]">
+          <aside className="rounded-3xl border border-red-950 bg-black/70 p-5 shadow-xl shadow-red-950/30">
+            <div className="mb-7 text-center">
+              <Image src="/logo.png" alt="Logo" width={125} height={125} className="mx-auto rounded-full border border-red-900" />
+              <p className="mt-3 text-xl font-black text-red-500">TROPA DA INGLATERRA</p>
+              <p className="text-xs font-bold text-zinc-500">PAINEL OPERACIONAL</p>
             </div>
 
             <nav className="space-y-2">
-              <Link href="/" className="block rounded-lg bg-red-800 px-4 py-3 font-bold">
-                🏠 INÍCIO
-              </Link>
-              <Link href="/metas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                🎯 METAS
-              </Link>
-              <Link href="/farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                📦 FARM
-              </Link>
+              <Menu href="/" texto="🏠 INÍCIO" ativo />
+              <Menu href="/metas" texto="🎯 METAS" />
+              <Menu href="/farm" texto="📦 FARM" />
 
               {podeVerAdmin && (
                 <>
-                  <Link href="/controle-farm" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    🌿 CONTROLE FARM
-                  </Link>
-                  <Link href="/compras" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    🛒 COMPRAS
-                  </Link>
-                  <Link href="/contatos" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    📞 CONTATOS
-                  </Link>
-                  <Link href="/programacao-semanal" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    📅 PROGRAMAÇÃO
-                  </Link>
-                  <Link href="/vendas" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    💰 VENDAS
-                  </Link>
-                  <Link href="/producao" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    🏭 PRODUÇÃO
-                  </Link>
-                  <Link href="/reembolso" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    💸 REEMBOLSO
-                  </Link>
+                  <Menu href="/controle-farm" texto="🌿 CONTROLE FARM" />
+                  <Menu href="/compras" texto="🛒 COMPRAS" />
+                  <Menu href="/contatos" texto="📞 CONTATOS" />
+                  <Menu href="/programacao-semanal" texto="📅 PROGRAMAÇÃO" />
+                  <Menu href="/vendas" texto="💰 VENDAS" />
+                  <Menu href="/producao" texto="🏭 PRODUÇÃO" />
+                  <Menu href="/reembolso" texto="💸 REEMBOLSO" />
                 </>
               )}
 
-              <Link href="/ranking" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                🏆 RANKING
-              </Link>
-              <Link href="/membros" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                👥 MEMBROS
-              </Link>
+              <Menu href="/ranking" texto="🏆 RANKING" />
+              <Menu href="/membros" texto="👥 MEMBROS" />
 
               {podeVerAdmin && (
                 <>
-                  <Link href="/acoes" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    🎯 AÇÕES
-                  </Link>
-                  <Link href="/relatorio" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    📊 RELATÓRIO
-                  </Link>
-                  <Link href="/admin" className="block rounded-lg px-4 py-3 font-bold text-zinc-400 hover:bg-zinc-900">
-                    ⚙️ ADMIN
-                  </Link>
+                  <Menu href="/acoes" texto="🎯 AÇÕES" />
+                  <Menu href="/relatorio" texto="📊 RELATÓRIO" />
+                  <Menu href="/admin" texto="⚙️ ADMIN" />
                 </>
               )}
             </nav>
 
-            <button
-              onClick={() => signOut()}
-              className="mt-6 w-full rounded-xl bg-red-700 px-4 py-3 font-bold hover:bg-red-600"
-            >
+            <button onClick={() => signOut()} className="mt-6 w-full rounded-2xl bg-red-700 px-4 py-3 font-black hover:bg-red-600">
               Sair
             </button>
           </aside>
 
-          <div className="rounded-xl border border-zinc-800 bg-zinc-950 p-5">
-            <div className="rounded-xl border border-red-950 bg-black p-6">
-              <div className="flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="space-y-5">
+            <section className="rounded-3xl border border-red-950 bg-black/75 p-6 shadow-xl shadow-red-950/30">
+              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <p className="font-black text-red-500">BEM-VINDO(A)!</p>
-                  <h3 className="mt-2 text-3xl font-black">
-                    {nomeExibicao(membro)}
-                  </h3>
-                  <p className="mt-2 text-zinc-400">
-                    Passaporte: {membro.passaporte || "Não informado"}
-                  </p>
-                  <p className="mt-1 text-zinc-400">
-                    Baú: {membro.numeroBau || "Não informado"}
-                  </p>
-                  <span className="mt-3 inline-block rounded-full bg-red-800 px-4 py-1 text-sm">
+                  <p className="font-black text-red-500">BEM-VINDO(A)</p>
+                  <h1 className="mt-1 text-4xl font-black">{nomeExibicao(membro)}</h1>
+                  <p className="mt-2 text-zinc-400">Passaporte: {membro.passaporte || "Não informado"} • Baú: {membro.numeroBau || "Não informado"}</p>
+                  <span className="mt-3 inline-block rounded-full border border-red-800 bg-red-950/60 px-4 py-1 text-sm font-black text-red-300">
                     {membro.cargo}
                   </span>
                 </div>
 
-                <div className="rounded-xl border border-red-900 bg-zinc-950 p-4 text-center">
-                  <p className="text-sm font-bold text-zinc-400">
-                    REGISTRO DE HORAS
-                  </p>
-                  <p className="mt-2 text-xl font-black">
-                    {plantaoAberto ? "🟢 Em plantão" : "⚪ Fora da cidade"}
-                  </p>
+                <div className="rounded-2xl border border-red-900 bg-zinc-950 p-5 text-center">
+                  <p className="text-sm font-black text-zinc-400">REGISTRO DE HORAS</p>
+                  <p className="mt-2 text-2xl font-black">{plantaoAberto ? "🟢 Em plantão" : "⚪ Fora da cidade"}</p>
 
                   <div className="mt-4 flex gap-3">
-                    <button
-                      onClick={iniciarPlantao}
-                      disabled={!!plantaoAberto}
-                      className="rounded-lg bg-green-700 px-5 py-3 font-bold text-white hover:bg-green-600 disabled:opacity-40"
-                    >
-                      🟢 Entrada
+                    <button onClick={iniciarPlantao} disabled={!!plantaoAberto} className="rounded-xl bg-green-700 px-5 py-3 font-black hover:bg-green-600 disabled:opacity-40">
+                      Entrada
                     </button>
-
-                    <button
-                      onClick={encerrarPlantao}
-                      disabled={!plantaoAberto}
-                      className="rounded-lg bg-red-700 px-5 py-3 font-bold text-white hover:bg-red-600 disabled:opacity-40"
-                    >
-                      🔴 Saída
+                    <button onClick={encerrarPlantao} disabled={!plantaoAberto} className="rounded-xl bg-red-700 px-5 py-3 font-black hover:bg-red-600 disabled:opacity-40">
+                      Saída
                     </button>
                   </div>
                 </div>
               </div>
-            </div>
+            </section>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <Card
-                titulo="HORAS NA CIDADE"
-                valor={formatarMinutos(totalMinutosPlantao)}
-                desc="TOTAL REGISTRADO"
-              />
+            <section className="grid gap-4 md:grid-cols-3">
+              <DashboardCard titulo="STATUS DA META" valor={`${porcentagemMeta}%`} desc={statusMeta} destaque />
+              {!isElite && <Card titulo="STATUS DA META" valor={`${porcentagemMeta}%`} desc={statusMeta} destaque />}
+             <DashboardCard titulo="FARMS PENDENTES" valor={String(farmsPendentes)} desc="AGUARDANDO APROVAÇÃO" destaque />
+            </section>
 
-              {!isElite && (
-                <Card
-                  titulo="STATUS DA META"
-                  valor={`${porcentagemMeta}%`}
-                  desc={statusMeta}
-                />
-              )}
-            </div>
-
-            {podeVerAdmin && (
-              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-                <h2 className="mb-4 text-2xl font-black text-red-500">
-                  ⚠️ PENDÊNCIAS DA GERÊNCIA
-                </h2>
-
-                <div className="grid gap-4 md:grid-cols-3">
-                  <Link href="/admin">
-                    <Card
-                      titulo="CADASTROS PENDENTES"
-                      valor={String(cadastrosPendentes)}
-                      desc="AGUARDANDO APROVAÇÃO"
-                    />
-                  </Link>
-
-                  <Link href="/admin">
-                    <Card
-                      titulo="FARMS PENDENTES"
-                      valor={String(farmsPendentes)}
-                      desc="AGUARDANDO APROVAÇÃO"
-                    />
-                  </Link>
-
-                  <Link href="/reembolso">
-                    <Card
-                      titulo="REEMBOLSOS PENDENTES"
-                      valor={String(reembolsosPendentes)}
-                      desc="AGUARDANDO PAGAMENTO"
-                    />
-                  </Link>
+            {!isElite && (
+              <section className="rounded-3xl border border-red-950 bg-black/75 p-6 shadow-xl shadow-red-950/30">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-black text-red-500">🎯 MINHA META SEMANAL</h2>
+                    <p className="text-sm text-zinc-500">Contando somente farms aprovados da semana atual.</p>
+                  </div>
+                  <p className="text-5xl font-black text-green-400">{porcentagemMeta}%</p>
                 </div>
 
-                {(cargoLimpo === "Líder" ||
-                  cargoLimpo === "Vice-Líder" ||
-                  cargoLimpo === "Gerente de Farm") && (
-                  <div className="mt-5 rounded-xl border border-yellow-700 bg-zinc-950 p-5 text-center">
-                    <h3 className="text-xl font-black text-yellow-400">
-                      📩 ALERTAS INDIVIDUAIS
-                    </h3>
+                <div className="mt-5 h-5 w-full overflow-hidden rounded-full bg-zinc-800">
+                  <div className="h-5 bg-green-500 transition-all" style={{ width: `${porcentagemMeta}%` }} />
+                </div>
 
+                <div className="mt-5 grid gap-3 md:grid-cols-4">
+                  <MiniMeta nome="Folhas" atual={folhasMeta} meta={2000} />
+                  <MiniMeta nome="Ópios" atual={opiosMeta} meta={2000} />
+                  <MiniMeta nome="Seringas" atual={seringasMeta} meta={800} />
+                  <MiniMeta nome="Agulhas" atual={agulhasMeta} meta={800} />
+                </div>
+
+                <p className="mt-4 text-center text-xl font-black text-zinc-300">{statusMeta}</p>
+              </section>
+            )}
+
+            {isElite && (
+              <section className="rounded-3xl border border-red-950 bg-black/75 p-6">
+                <h2 className="text-2xl font-black text-red-500">⚔️ ELITE DE AÇÕES</h2>
+                <p className="mt-3 text-zinc-300">
+                  Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
+                </p>
+              </section>
+            )}
+
+            {podeVerAdmin && (
+              <section className="rounded-3xl border border-red-950 bg-black/75 p-6">
+                <h2 className="mb-4 text-2xl font-black text-red-500">⚠️ CENTRAL DA GERÊNCIA</h2>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <Link href="/admin"><Card titulo="CADASTROS" valor={String(cadastrosPendentes)} desc="PENDENTES" /></Link>
+                  <Link href="/admin"><Card titulo="FARMS" valor={String(farmsPendentes)} desc="PENDENTES" /></Link>
+                  <Link href="/reembolso"><Card titulo="REEMBOLSOS" valor={String(reembolsosPendentes)} desc="PENDENTES" /></Link>
+                </div>
+
+                {(cargoLimpo === "Líder" || cargoLimpo === "Vice-Líder" || cargoLimpo === "Gerente de Farm") && (
+                  <div className="mt-5 rounded-2xl border border-yellow-700 bg-yellow-950/20 p-5 text-center">
+                    <h3 className="text-xl font-black text-yellow-400">📩 ALERTAS INDIVIDUAIS</h3>
                     <p className="mt-2 text-sm text-zinc-400">
-                      Envia DM para quem não bateu meta, quem não se cadastrou e
-                      parabéns para quem bateu.
+                      Envia DM para quem não bateu meta, quem não se cadastrou e parabéns para quem bateu.
                     </p>
-
-                    <button
-                      onClick={enviarAlertasIndividuais}
-                      disabled={enviandoAlertas}
-                      className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
-                    >
-                      {enviandoAlertas
-                        ? "Enviando alertas..."
-                        : "📩 Enviar Alertas Individuais"}
+                    <button onClick={enviarAlertasIndividuais} disabled={enviandoAlertas} className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50">
+                      {enviandoAlertas ? "Enviando alertas..." : "📩 Enviar Alertas Individuais"}
                     </button>
                   </div>
                 )}
               </section>
             )}
 
-            {!isElite && (
-              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-                <h2 className="text-2xl font-black text-red-500">
-                  🎯 MINHA META SEMANAL
-                </h2>
+            <section className="rounded-3xl border border-red-950 bg-black/75 p-6">
+              <h2 className="mb-4 text-2xl font-black text-red-500">📢 AVISOS DA INGLATERRA</h2>
 
-                <p className="mt-4 text-center text-6xl font-black text-green-400">
-                  {porcentagemMeta}%
-                </p>
-
-                <div className="mt-5 h-5 w-full overflow-hidden rounded-full bg-zinc-800">
-                  <div
-                    className="h-5 bg-green-500 transition-all"
-                    style={{ width: `${porcentagemMeta}%` }}
-                  />
-                </div>
-
-                <div className="mt-5 grid gap-3 md:grid-cols-4">
-                  <Card titulo="FOLHAS" valor={`${folhasMeta}/2000`} desc="META SEMANAL" />
-                  <Card titulo="ÓPIOS" valor={`${opiosMeta}/2000`} desc="META SEMANAL" />
-                  <Card titulo="SERINGAS" valor={`${seringasMeta}/800`} desc="META SEMANAL" />
-                  <Card titulo="AGULHAS" valor={`${agulhasMeta}/800`} desc="META SEMANAL" />
-                </div>
-
-                <p className="mt-4 text-center text-xl font-bold text-zinc-300">
-                  {statusMeta}
-                </p>
-              </section>
-            )}
-
-            {isElite && (
-              <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-                <h2 className="text-2xl font-black text-red-500">
-                  ⚔️ ELITE DE AÇÕES
-                </h2>
-                <p className="mt-3 text-zinc-300">
-                  Você está marcado como Elite/Gerente de Ações e não precisa bater
-                  meta de farm semanal.
-                </p>
-              </section>
-            )}
-
-            <section className="mt-5 rounded-xl border border-red-900 bg-black p-6">
-              <h2 className="mb-4 text-2xl font-black text-red-500">
-                📢 AVISOS DA INGLATERRA
-              </h2>
-
-              {avisos.length === 0 && (
-                <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>
-              )}
+              {avisos.length === 0 && <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>}
 
               <div className="grid gap-3">
                 {avisos.map((aviso) => (
-                  <div
-                    key={aviso.id}
-                    className="rounded-lg border border-zinc-800 bg-zinc-950 p-4"
-                  >
+                  <div key={aviso.id} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
                     <p className="text-zinc-200">{aviso.texto}</p>
                   </div>
                 ))}
@@ -825,20 +684,52 @@ export default function Home() {
   );
 }
 
-function Card({
-  titulo,
-  valor,
-  desc,
-}: {
-  titulo: string;
-  valor: string;
-  desc: string;
-}) {
+function Menu({ href, texto, ativo = false }: { href: string; texto: string; ativo?: boolean }) {
   return (
-    <div className="rounded-xl border border-red-950 bg-black p-5 text-center">
-      <p className="text-sm text-zinc-400">{titulo}</p>
-      <h3 className="mt-2 text-2xl font-black">{valor}</h3>
-      <p className="mt-2 text-xs text-zinc-500">{desc}</p>
+    <Link
+      href={href}
+      className={`block rounded-2xl px-4 py-3 font-black transition ${
+        ativo
+          ? "bg-red-800 text-white shadow-lg shadow-red-950/40"
+          : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+      }`}
+    >
+      {texto}
+    </Link>
+  );
+}
+
+function Card({ titulo, valor, desc, destaque = false }: { titulo: string; valor: string; desc: string; destaque?: boolean }) {
+  return (
+    <div className={`rounded-3xl border p-5 text-center ${
+      destaque
+        ? "border-red-900 bg-black/80 shadow-lg shadow-red-950/30"
+        : "border-red-950 bg-black/70"
+    }`}>
+      <p className="text-sm font-bold text-zinc-400">{titulo}</p>
+      <h3 className="mt-2 text-3xl font-black">{valor}</h3>
+      <p className="mt-2 text-xs font-bold text-zinc-500">{desc}</p>
+    </div>
+  );
+}
+
+function MiniMeta({ nome, atual, meta }: { nome: string; atual: number; meta: number }) {
+  const porcentagem = Math.min(100, Math.floor((atual / meta) * 100));
+
+  return (
+    <div className="rounded-2xl border border-red-950 bg-zinc-950 p-4">
+      <div className="flex items-center justify-between">
+        <p className="font-black text-zinc-300">{nome}</p>
+        <p className="text-sm font-black text-red-400">{porcentagem}%</p>
+      </div>
+
+      <p className="mt-2 text-xl font-black">
+        {atual}/{meta}
+      </p>
+
+      <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-zinc-800">
+        <div className="h-3 bg-red-600" style={{ width: `${porcentagem}%` }} />
+      </div>
     </div>
   );
 }
