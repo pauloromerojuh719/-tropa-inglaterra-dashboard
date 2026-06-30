@@ -38,6 +38,8 @@ type Aviso = {
 
 type Farm = {
   membroId?: string;
+  membroEmail?: string;
+  membroNome?: string;
   folhas: number;
   opios: number;
   seringas: number;
@@ -60,6 +62,11 @@ type Plantao = {
   status: "aberto" | "fechado";
 };
 
+const META_FOLHAS = 2000;
+const META_OPIOS = 2000;
+const META_SERINGAS = 800;
+const META_AGULHAS = 800;
+
 function nomeExibicao(membro: Membro | null) {
   if (!membro) return "Sem nome";
 
@@ -72,7 +79,7 @@ function nomeExibicao(membro: Membro | null) {
   );
 }
 
-function inicioDaSemanaAtual() {
+function inicioSemanaAtualDate() {
   const hoje = new Date();
   const dia = hoje.getDay();
   const diferenca = dia === 0 ? 6 : dia - 1;
@@ -81,7 +88,21 @@ function inicioDaSemanaAtual() {
   inicio.setDate(hoje.getDate() - diferenca);
   inicio.setHours(0, 0, 0, 0);
 
-  return Timestamp.fromDate(inicio);
+  return inicio;
+}
+
+function inicioSemanaPassadaDate() {
+  const atual = inicioSemanaAtualDate();
+  const passada = new Date(atual);
+  passada.setDate(atual.getDate() - 7);
+  return passada;
+}
+
+function pegarData(valor: any) {
+  if (!valor) return null;
+  if (valor.toDate) return valor.toDate();
+  if (valor.seconds) return new Date(valor.seconds * 1000);
+  return new Date(valor);
 }
 
 function formatarMinutos(minutos: number) {
@@ -131,10 +152,10 @@ export default function Home() {
     cargoLimpo === "Gerente de Produção" ||
     cargoLimpo === "Gerente de Ações";
 
-  const progressoFolhas = Math.min(folhasMeta, 2000);
-  const progressoOpios = Math.min(opiosMeta, 2000);
-  const progressoSeringas = Math.min(seringasMeta, 800);
-  const progressoAgulhas = Math.min(agulhasMeta, 800);
+  const progressoFolhas = Math.min(folhasMeta, META_FOLHAS);
+  const progressoOpios = Math.min(opiosMeta, META_OPIOS);
+  const progressoSeringas = Math.min(seringasMeta, META_SERINGAS);
+  const progressoAgulhas = Math.min(agulhasMeta, META_AGULHAS);
 
   const totalFarm =
     progressoFolhas +
@@ -149,10 +170,10 @@ export default function Home() {
     : Math.min(100, Math.floor((totalFarm / totalMeta) * 100));
 
   const metaCompleta =
-    folhasMeta >= 2000 &&
-    opiosMeta >= 2000 &&
-    seringasMeta >= 800 &&
-    agulhasMeta >= 800;
+    folhasMeta >= META_FOLHAS &&
+    opiosMeta >= META_OPIOS &&
+    seringasMeta >= META_SERINGAS &&
+    agulhasMeta >= META_AGULHAS;
 
   const statusMeta = isElite
     ? "ISENTO"
@@ -335,38 +356,76 @@ export default function Home() {
       if (!session?.user) return;
 
       const discordId = (session.user as any).id;
+      const emailLogado = session.user.email || "";
+
       if (!discordId) return;
 
-      const inicioSemana = inicioDaSemanaAtual();
+      const membroSnap = await getDoc(doc(db, "membros", discordId));
+      const membroAtual = membroSnap.exists()
+        ? (membroSnap.data() as Membro)
+        : null;
+
+      const inicioAtual = inicioSemanaAtualDate();
+      const inicioPassada = inicioSemanaPassadaDate();
 
       const snapshot = await getDocs(
-        query(
-          collection(db, "farm"),
-          where("status", "==", "aprovado"),
-          where("criadoEm", ">=", inicioSemana)
-        )
+        query(collection(db, "farm"), where("status", "==", "aprovado"))
       );
 
-      let minhasFolhas = 0;
-      let meusOpios = 0;
-      let minhasSeringas = 0;
-      let minhasAgulhas = 0;
+      let semanaFolhas = 0;
+      let semanaOpios = 0;
+      let semanaSeringas = 0;
+      let semanaAgulhas = 0;
+
+      let passadaFolhas = 0;
+      let passadaOpios = 0;
+      let passadaSeringas = 0;
+      let passadaAgulhas = 0;
 
       snapshot.docs.forEach((item) => {
         const farm = item.data() as Farm;
 
-        if (farm.membroId === discordId) {
-          minhasFolhas += farm.folhas || 0;
-          meusOpios += farm.opios || 0;
-          minhasSeringas += farm.seringas || 0;
-          minhasAgulhas += farm.agulhas || 0;
+        const dataFarm = pegarData(farm.criadoEm);
+        if (!dataFarm) return;
+
+        const pertenceAoUsuario =
+          farm.membroId === discordId ||
+          farm.membroEmail === emailLogado ||
+          farm.membroNome === membroAtual?.nomeRP ||
+          farm.membroNome === membroAtual?.nome ||
+          farm.membroNome === membroAtual?.nomeDiscord ||
+          farm.membroNome === membroAtual?.username;
+
+        if (!pertenceAoUsuario) return;
+
+        const ehSemanaAtual = dataFarm >= inicioAtual;
+        const ehSemanaPassada =
+          dataFarm >= inicioPassada && dataFarm < inicioAtual;
+
+        if (ehSemanaAtual) {
+          semanaFolhas += farm.folhas || 0;
+          semanaOpios += farm.opios || 0;
+          semanaSeringas += farm.seringas || 0;
+          semanaAgulhas += farm.agulhas || 0;
+        }
+
+        if (ehSemanaPassada) {
+          passadaFolhas += farm.folhas || 0;
+          passadaOpios += farm.opios || 0;
+          passadaSeringas += farm.seringas || 0;
+          passadaAgulhas += farm.agulhas || 0;
         }
       });
 
-      setFolhasMeta(minhasFolhas);
-      setOpiosMeta(meusOpios);
-      setSeringasMeta(minhasSeringas);
-      setAgulhasMeta(minhasAgulhas);
+      const sobraFolhas = Math.max(passadaFolhas - META_FOLHAS, 0);
+      const sobraOpios = Math.max(passadaOpios - META_OPIOS, 0);
+      const sobraSeringas = Math.max(passadaSeringas - META_SERINGAS, 0);
+      const sobraAgulhas = Math.max(passadaAgulhas - META_AGULHAS, 0);
+
+      setFolhasMeta(semanaFolhas + sobraFolhas);
+      setOpiosMeta(semanaOpios + sobraOpios);
+      setSeringasMeta(semanaSeringas + sobraSeringas);
+      setAgulhasMeta(semanaAgulhas + sobraAgulhas);
     }
 
     buscarMembro();
@@ -620,7 +679,10 @@ export default function Home() {
             </div>
 
             <div className="rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-4">
-              <p className="text-lg font-bold text-white">{nomeExibicao(membro)}</p>
+              <p className="text-lg font-bold text-white">
+                {nomeExibicao(membro)}
+              </p>
+
               <p className="text-sm text-zinc-400">{membro.cargo}</p>
 
               <p className="mt-1 text-xs text-zinc-500">
@@ -694,7 +756,7 @@ export default function Home() {
                   </h2>
 
                   <p className="text-sm text-zinc-500">
-                    Contando somente farms aprovados da semana atual.
+                    Contando farms aprovados da semana atual + sobra da semana passada.
                   </p>
                 </div>
 
@@ -711,10 +773,10 @@ export default function Home() {
               </div>
 
               <div className="mt-5 grid gap-3 md:grid-cols-4">
-                <MiniMeta nome="Folhas" atual={folhasMeta} meta={2000} />
-                <MiniMeta nome="Ópios" atual={opiosMeta} meta={2000} />
-                <MiniMeta nome="Seringas" atual={seringasMeta} meta={800} />
-                <MiniMeta nome="Agulhas" atual={agulhasMeta} meta={800} />
+                <MiniMeta nome="Folhas" atual={folhasMeta} meta={META_FOLHAS} />
+                <MiniMeta nome="Ópios" atual={opiosMeta} meta={META_OPIOS} />
+                <MiniMeta nome="Seringas" atual={seringasMeta} meta={META_SERINGAS} />
+                <MiniMeta nome="Agulhas" atual={agulhasMeta} meta={META_AGULHAS} />
               </div>
             </section>
           )}
