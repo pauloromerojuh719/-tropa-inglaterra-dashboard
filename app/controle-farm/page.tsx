@@ -225,9 +225,13 @@ export default function ControleFarmPage() {
       const membroDoCadastro =
         membrosPorId[farm.membroId] || membrosPorEmail[farm.membroEmail];
 
-      const nomeCorreto = membroDoCadastro
-        ? nomeExibicao(membroDoCadastro)
-        : farm.membroNome || "Sem nome";
+      const nomeCorreto =
+  farm.membroNome ||
+  membroDoCadastro?.nomeRP ||
+  membroDoCadastro?.nome ||
+  membroDoCadastro?.nomeDiscord ||
+  membroDoCadastro?.username ||
+  "Sem nome";
 
       const membroEmail = farm.membroEmail || membroDoCadastro?.email || "";
       const membroId = farm.membroId || membroDoCadastro?.discordId || "";

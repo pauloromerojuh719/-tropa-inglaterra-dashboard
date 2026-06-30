@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { Client, GatewayIntentBits, TextChannel } from "discord.js";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../../../lib/firebase";
 
@@ -8,225 +7,68 @@ const META_OPIOS = 2000;
 const META_SERINGAS = 800;
 const META_AGULHAS = 800;
 
-function dataBrasilAgora() {
-  return new Date().toLocaleString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function dataBrasilSomenteData(data: Date) {
-  return data.toLocaleDateString("pt-BR", {
-    timeZone: "America/Sao_Paulo",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-  });
-}
-
-function inicioDaSemana() {
-  const agoraBrasil = new Date(
-    new Date().toLocaleString("en-US", {
-      timeZone: "America/Sao_Paulo",
-    })
-  );
-
-  const dia = agoraBrasil.getDay();
-  const diferenca = dia === 0 ? 6 : dia - 1;
-
-  const inicio = new Date(agoraBrasil);
-  inicio.setDate(agoraBrasil.getDate() - diferenca);
-  inicio.setHours(0, 0, 0, 0);
-
-  return inicio;
-}
-
-function fimDaSemana() {
-  const inicio = inicioDaSemana();
-  const fim = new Date(inicio);
-
-  fim.setDate(inicio.getDate() + 6);
-  fim.setHours(23, 59, 59, 999);
-
-  return fim;
-}
-
 function converterDataFirebase(data: any) {
   if (!data) return null;
-
-  if (data?.toDate) {
-    return data.toDate();
-  }
-
+  if (data?.toDate) return data.toDate();
   return new Date(data);
 }
 
-function dentroDaSemana(data: any) {
-  const d = converterDataFirebase(data);
-
-  if (!d) return false;
-
-  return d >= inicioDaSemana() && d <= fimDaSemana();
-}
-
-function dinheiro(valor: number) {
-  return `R$ ${valor.toLocaleString("pt-BR")}`;
-}
-
 function isentoMeta(cargo?: string) {
-  const cargoLimpo = cargo?.trim();
+  const cargoLimpo = String(cargo || "").trim();
   return cargoLimpo === "Elite" || cargoLimpo === "Gerente de Ações";
 }
 
 export async function GET() {
   try {
-    const client = new Client({
-      intents: [GatewayIntentBits.Guilds],
-    });
-
-    await client.login(process.env.DISCORD_BOT_TOKEN);
-
-    const canal = await client.channels.fetch(
-      process.env.DISCORD_RELATORIO_SEMANAL_CHANNEL_ID!
-    );
-
-    if (!canal || !(canal instanceof TextChannel)) {
-      await client.destroy();
-
-      return NextResponse.json(
-        { erro: "Canal do relatório não encontrado." },
-        { status: 500 }
-      );
-    }
+    const inicio = new Date("2026-06-22T00:00:00-03:00");
+    const fim = new Date("2026-06-28T23:59:59-03:00");
 
     const farmSnap = await getDocs(collection(db, "farm"));
-    const vendasSnap = await getDocs(collection(db, "vendas"));
-    const comprasSnap = await getDocs(collection(db, "compras"));
-    const producoesSnap = await getDocs(collection(db, "producoes"));
-    const reembolsosSnap = await getDocs(collection(db, "reembolsos"));
-    const acoesSnap = await getDocs(collection(db, "acoes"));
     const membrosSnap = await getDocs(collection(db, "membros"));
-    const plantoesSnap = await getDocs(collection(db, "plantoes"));
 
-    let totalFarm = 0;
-    let totalVendas = 0;
-    let totalCompras = 0;
-    let totalProduzido = 0;
-    let totalReembolsosPagos = 0;
-    let totalAcoes = 0;
-    let totalHoras = 0;
+    const metasPorMembro: Record<string, any> = {};
 
-    const metasPorMembro: Record<
-      string,
-      {
-        folhas: number;
-        opios: number;
-        seringas: number;
-        agulhas: number;
+    farmSnap.docs.forEach((doc) => {
+      const f = doc.data() as any;
+
+      if (f.status !== "aprovado") return;
+
+      const data = converterDataFirebase(f.criadoEm);
+      if (!data) return;
+
+      if (data < inicio || data > fim) return;
+
+      const membroId = f.membroId || f.discordId || f.membroEmail || f.membroNome;
+
+      if (!metasPorMembro[membroId]) {
+        metasPorMembro[membroId] = {
+          folhas: 0,
+          opios: 0,
+          seringas: 0,
+          agulhas: 0,
+        };
       }
-    > = {};    farmSnap.docs.forEach((doc) => {
-      const f = doc.data();
 
-      if (f.status === "aprovado" && dentroDaSemana(f.criadoEm)) {
-        const membroId =
-          f.membroId || f.discordId || f.membroEmail || f.membroNome;
-
-        if (!metasPorMembro[membroId]) {
-          metasPorMembro[membroId] = {
-            folhas: 0,
-            opios: 0,
-            seringas: 0,
-            agulhas: 0,
-          };
-        }
-
-        metasPorMembro[membroId].folhas += Number(f.folhas || 0);
-        metasPorMembro[membroId].opios += Number(f.opios || 0);
-        metasPorMembro[membroId].seringas += Number(f.seringas || 0);
-        metasPorMembro[membroId].agulhas += Number(f.agulhas || 0);
-
-        totalFarm +=
-          Number(f.folhas || 0) +
-          Number(f.opios || 0) +
-          Number(f.seringas || 0) +
-          Number(f.agulhas || 0);
-      }
+      metasPorMembro[membroId].folhas += Number(f.folhas || 0);
+      metasPorMembro[membroId].opios += Number(f.opios || 0);
+      metasPorMembro[membroId].seringas += Number(f.seringas || 0);
+      metasPorMembro[membroId].agulhas += Number(f.agulhas || 0);
     });
 
-    vendasSnap.docs.forEach((doc) => {
-      const v = doc.data();
+    const bateram: any[] = [];
+    const naoBateram: any[] = [];
+    const isentos: any[] = [];
 
-      if (dentroDaSemana(v.criadoEm)) {
-        totalVendas += Number(v.valor || 0);
-      }
-    });
+    membrosSnap.docs.forEach((doc) => {
+      const m = doc.data() as any;
 
-    comprasSnap.docs.forEach((doc) => {
-      const c = doc.data();
+      if (m.status !== "aprovado") return;
 
-      if (dentroDaSemana(c.criadoEm)) {
-        totalCompras += Number(c.valor || 0);
-      }
-    });
-
-    producoesSnap.docs.forEach((doc) => {
-      const p = doc.data();
-
-      if (dentroDaSemana(p.criadoEm)) {
-        totalProduzido += Number(p.quantidade || 0);
-      }
-    });
-
-    reembolsosSnap.docs.forEach((doc) => {
-      const r = doc.data();
-
-      if (r.status === "pago" && dentroDaSemana(r.pagoEm || r.criadoEm)) {
-        totalReembolsosPagos += Number(r.valor || 0);
-      }
-    });
-
-    acoesSnap.docs.forEach((doc) => {
-      const a = doc.data();
-
-      if (dentroDaSemana(a.criadoEm)) {
-        totalAcoes++;
-      }
-    });
-
-    plantoesSnap.docs.forEach((doc) => {
-      const p = doc.data();
-
-      if (p.status === "fechado" && dentroDaSemana(p.fim || p.inicio)) {
-        totalHoras += Number(p.minutos || 0);
-      }
-    });
-
-    const membrosAprovadosDocs = membrosSnap.docs.filter((doc) => {
-      const m = doc.data();
-      return m.status === "aprovado";
-    });
-
-    const membrosAprovados = membrosAprovadosDocs.length;
-
-    const removidos = membrosSnap.docs.filter((doc) => {
-      const m = doc.data();
-      return m.status === "removido";
-    }).length;
-
-    let bateramMeta = 0;
-    let naoBateramMeta = 0;
-    let isentos = 0;
-
-    membrosAprovadosDocs.forEach((doc) => {
-      const m = doc.data();
+      const nome = m.nomeRP || m.nome || m.nomeDiscord || "Sem nome";
       const membroId = m.discordId || doc.id;
 
       if (isentoMeta(m.cargo)) {
-        isentos++;
+        isentos.push(nome);
         return;
       }
 
@@ -243,108 +85,40 @@ export async function GET() {
         meta.seringas >= META_SERINGAS &&
         meta.agulhas >= META_AGULHAS;
 
+      const dados = {
+        nome,
+        folhas: meta.folhas,
+        opios: meta.opios,
+        seringas: meta.seringas,
+        agulhas: meta.agulhas,
+        total: meta.folhas + meta.opios + meta.seringas + meta.agulhas,
+      };
+
       if (bateu) {
-        bateramMeta++;
+        bateram.push(dados);
       } else {
-        naoBateramMeta++;
+        naoBateram.push(dados);
       }
-    });    const horas = Math.floor(totalHoras / 60);
-    const minutos = totalHoras % 60;
-
-    const inicioSemana = inicioDaSemana();
-    const fimSemana = fimDaSemana();
-
-    await canal.send({
-      embeds: [
-        {
-          color: 0xe74c3c,
-          title: "📊 Relatório Semanal - Inglaterra",
-          description: `Semana: ${dataBrasilSomenteData(
-            inicioSemana
-          )} até ${dataBrasilSomenteData(fimSemana)}
-Gerado em: ${dataBrasilAgora()}`,
-          fields: [
-            {
-              name: "👥 Membros aprovados",
-              value: String(membrosAprovados),
-              inline: true,
-            },
-            {
-              name: "🚪 Removidos",
-              value: String(removidos),
-              inline: true,
-            },
-            {
-              name: "✅ Bateram meta",
-              value: String(bateramMeta),
-              inline: true,
-            },
-            {
-              name: "❌ Não bateram meta",
-              value: String(naoBateramMeta),
-              inline: true,
-            },
-            {
-              name: "⚔️ Isentos",
-              value: String(isentos),
-              inline: true,
-            },
-            {
-              name: "📦 Farm aprovado",
-              value: totalFarm.toLocaleString("pt-BR"),
-              inline: true,
-            },
-            {
-              name: "💵 Vendas",
-              value: dinheiro(totalVendas),
-              inline: true,
-            },
-            {
-              name: "🛒 Compras",
-              value: dinheiro(totalCompras),
-              inline: true,
-            },
-            {
-              name: "🏭 Produção",
-              value: totalProduzido.toLocaleString("pt-BR"),
-              inline: true,
-            },
-            {
-              name: "💸 Reembolsos pagos",
-              value: dinheiro(totalReembolsosPagos),
-              inline: true,
-            },
-            {
-              name: "🎯 Ações realizadas",
-              value: String(totalAcoes),
-              inline: true,
-            },
-            {
-              name: "⏱️ Horas registradas",
-              value: `${horas}h ${minutos}m`,
-              inline: true,
-            },
-          ],
-          footer: {
-            text: "Painel Inglaterra",
-          },
-        },
-      ],
     });
 
-    await client.destroy();
-
     return NextResponse.json({
-      sucesso: true,
-      bateramMeta,
-      naoBateramMeta,
+      status: "OK",
+      semana: "22/06/2026 até 28/06/2026",
+      bateramTotal: bateram.length,
+      naoBateramTotal: naoBateram.length,
+      isentosTotal: isentos.length,
+      bateram,
+      naoBateram,
       isentos,
     });
   } catch (error) {
     console.error(error);
 
     return NextResponse.json(
-      { erro: "Erro ao gerar relatório semanal." },
+      {
+        status: "ERRO",
+        erro: String(error),
+      },
       { status: 500 }
     );
   }
