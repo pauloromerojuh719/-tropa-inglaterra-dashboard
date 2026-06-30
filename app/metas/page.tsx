@@ -18,8 +18,11 @@ type Farm = {
 };
 
 type MembroSistema = {
+  id?: string;
   nome?: string;
   nomeRP?: string;
+  nomeDiscord?: string;
+  username?: string;
   email?: string;
   cargo?: string;
   status?: string;
@@ -52,6 +55,17 @@ const cargosQueVeemTodos = [
   "Gerente de Compras",
   "Gerente de Vendas",
 ];
+
+function nomeExibicao(membro?: MembroSistema | null, fallback?: string) {
+  return (
+    membro?.nomeRP ||
+    membro?.nome ||
+    membro?.nomeDiscord ||
+    membro?.username ||
+    fallback ||
+    "Sem nome"
+  );
+}
 
 export default function MetasPage() {
   const { data: session, status } = useSession();
@@ -103,16 +117,21 @@ export default function MetasPage() {
     setCarregando(true);
 
     const emailLogado = session?.user?.email || "";
+    const discordIdLogado = (session?.user as any)?.id || "";
 
     const membrosSnapshot = await getDocs(collection(db, "membros"));
 
-    const todosMembrosSistema = membrosSnapshot.docs.map(
-      (doc) => doc.data() as MembroSistema
-    );
+    const todosMembrosSistema = membrosSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as MembroSistema),
+    }));
 
     const usuarioLogado =
-      todosMembrosSistema.find((membro) => membro.email === emailLogado) ||
-      null;
+      todosMembrosSistema.find(
+        (membro) =>
+          membro.email === emailLogado ||
+          membro.id === discordIdLogado
+      ) || null;
 
     setMembroLogado(usuarioLogado);
 
@@ -132,17 +151,28 @@ export default function MetasPage() {
       const data = pegarData(farm);
       if (!data) return;
 
-      if (!podeVerTodos && farm.membroEmail !== emailLogado) {
+      if (!podeVerTodos && farm.membroEmail !== emailLogado && farm.membroId !== discordIdLogado) {
         return;
       }
 
+      const membroSistema =
+        todosMembrosSistema.find((membro) => membro.id === farm.membroId) ||
+        todosMembrosSistema.find((membro) => membro.email === farm.membroEmail) ||
+        todosMembrosSistema.find((membro) => membro.nome === farm.membroNome) ||
+        null;
+
       const chave =
-        farm.membroId || farm.membroEmail || farm.membroNome || "Sem nome";
+        farm.membroId ||
+        farm.membroEmail ||
+        membroSistema?.id ||
+        membroSistema?.email ||
+        farm.membroNome ||
+        "Sem nome";
 
       if (!resumo[chave]) {
         resumo[chave] = {
-          nome: farm.membroNome || "Sem nome",
-          email: farm.membroEmail || "",
+          nome: nomeExibicao(membroSistema, farm.membroNome),
+          email: farm.membroEmail || membroSistema?.email || "",
           folhas: 0,
           opios: 0,
           seringas: 0,
@@ -176,10 +206,7 @@ export default function MetasPage() {
       .map((membro) => {
         const extraFolhas = Math.max(membro.saldoFolhas - META_FOLHAS, 0);
         const extraOpios = Math.max(membro.saldoOpios - META_OPIOS, 0);
-        const extraSeringas = Math.max(
-          membro.saldoSeringas - META_SERINGAS,
-          0
-        );
+        const extraSeringas = Math.max(membro.saldoSeringas - META_SERINGAS, 0);
         const extraAgulhas = Math.max(membro.saldoAgulhas - META_AGULHAS, 0);
 
         return {

@@ -17,12 +17,6 @@ import {
   Timestamp,
 } from "firebase/firestore";
 import { db } from "./lib/firebase";
-import PanelShell from "./components/PanelShell";
-import HomeHeader from "./components/HomeHeader";
-import StatusCidade from "./components/StatusCidade";
-import DashboardCard from "./components/Card";
-import MiniMetaCard from "./components/MiniMeta";
-import Sidebar from "./components/Sidebar";
 
 type Membro = {
   nome: string;
@@ -96,6 +90,10 @@ function formatarMinutos(minutos: number) {
   return `${horas}h ${mins}m`;
 }
 
+function formatarNumero(valor: number) {
+  return valor.toLocaleString("pt-BR");
+}
+
 export default function Home() {
   const { data: session } = useSession();
 
@@ -160,7 +158,9 @@ export default function Home() {
     ? "ISENTO"
     : metaCompleta
     ? "META BATIDA"
-    : "EM ANDAMENTO";  async function enviarAlertasIndividuais() {
+    : "EM ANDAMENTO";
+
+  async function enviarAlertasIndividuais() {
     const confirmar = confirm(
       "Tem certeza que deseja enviar os alertas individuais por DM no Discord?"
     );
@@ -329,7 +329,9 @@ export default function Home() {
       } else {
         setAvisos([]);
       }
-    }    async function buscarMinhaMeta() {
+    }
+
+    async function buscarMinhaMeta() {
       if (!session?.user) return;
 
       const discordId = (session.user as any).id;
@@ -499,25 +501,44 @@ export default function Home() {
         </div>
       </main>
     );
-  }  if (membro.status === "pendente") {
+  }
+
+  if (membro.status === "pendente") {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
         <div className="max-w-xl rounded-2xl border border-red-900 bg-zinc-950 p-8 text-center shadow-2xl shadow-red-950/40">
-          <Image src="/logo.png" alt="Tropa da Inglaterra" width={140} height={140} className="mx-auto rounded-full" />
+          <Image
+            src="/logo.png"
+            alt="Tropa da Inglaterra"
+            width={140}
+            height={140}
+            className="mx-auto rounded-full"
+          />
 
           <h1 className="mt-6 text-4xl font-black text-red-600">
             AGUARDANDO APROVAÇÃO
           </h1>
 
-          <p className="mt-4 text-xl">Nome RP: <strong>{membro.nomeRP}</strong></p>
-          <p className="mt-2 text-xl">Passaporte: <strong>{membro.passaporte}</strong></p>
-          <p className="mt-2 text-xl">Baú: <strong>{membro.numeroBau}</strong></p>
+          <p className="mt-4 text-xl">
+            Nome RP: <strong>{membro.nomeRP}</strong>
+          </p>
+
+          <p className="mt-2 text-xl">
+            Passaporte: <strong>{membro.passaporte}</strong>
+          </p>
+
+          <p className="mt-2 text-xl">
+            Baú: <strong>{membro.numeroBau}</strong>
+          </p>
 
           <p className="mt-4 text-zinc-400">
             Aguarde um Gerente, Vice-Líder ou Líder aprovar seu acesso.
           </p>
 
-          <button onClick={() => signOut()} className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-black hover:bg-red-600">
+          <button
+            onClick={() => signOut()}
+            className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-black hover:bg-red-600"
+          >
             Sair
           </button>
         </div>
@@ -526,172 +547,320 @@ export default function Home() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#3b0505_0%,#050505_35%,#000_100%)] p-5 text-white">
-      <section className="mx-auto max-w-7xl">
-        <Image src="/banner.png" alt="Tropa da Inglaterra" width={1400} height={700} className="mb-5 w-full rounded-3xl border border-red-900 shadow-2xl shadow-red-950/50" priority />
+    <main className="min-h-screen bg-[#050505] text-white">
+      <section className="mx-auto grid min-h-screen max-w-[1850px] gap-6 p-6 lg:grid-cols-[280px_1fr_360px]">
+        <aside className="rounded-3xl border border-red-900 bg-black/80 p-5">
+          <div className="text-center">
+            <Image
+              src="/logo.png"
+              alt="Logo"
+              width={96}
+              height={96}
+              className="mx-auto rounded-full border border-red-800"
+            />
 
-        <section className="grid gap-5 md:grid-cols-[290px_1fr]">
-          <aside className="rounded-3xl border border-red-950 bg-black/70 p-5 shadow-xl shadow-red-950/30">
-            <div className="mb-7 text-center">
-              <Image src="/logo.png" alt="Logo" width={125} height={125} className="mx-auto rounded-full border border-red-900" />
-              <p className="mt-3 text-xl font-black text-red-500">TROPA DA INGLATERRA</p>
-              <p className="text-xs font-bold text-zinc-500">PAINEL OPERACIONAL</p>
-            </div>
+            <h1 className="mt-4 text-xl font-black text-red-600">
+              TROPA DA INGLATERRA
+            </h1>
 
-            <nav className="space-y-2">
-              <Menu href="/" texto="🏠 INÍCIO" ativo />
-              <Menu href="/metas" texto="🎯 METAS" />
-              <Menu href="/farm" texto="📦 FARM" />
+            <p className="text-xs text-zinc-500">Painel Operacional</p>
+          </div>
 
-              {podeVerAdmin && (
-                <>
-                  <Menu href="/controle-farm" texto="🌿 CONTROLE FARM" />
-                  <Menu href="/compras" texto="🛒 COMPRAS" />
-                  <Menu href="/contatos" texto="📞 CONTATOS" />
-                  <Menu href="/programacao-semanal" texto="📅 PROGRAMAÇÃO" />
-                  <Menu href="/vendas" texto="💰 VENDAS" />
-                  <Menu href="/producao" texto="🏭 PRODUÇÃO" />
-                  <Menu href="/reembolso" texto="💸 REEMBOLSO" />
-                </>
-              )}
-
-              <Menu href="/ranking" texto="🏆 RANKING" />
-              <Menu href="/membros" texto="👥 MEMBROS" />
-
-              {podeVerAdmin && (
-                <>
-                  <Menu href="/acoes" texto="🎯 AÇÕES" />
-                  <Menu href="/relatorio" texto="📊 RELATÓRIO" />
-                  <Menu href="/admin" texto="⚙️ ADMIN" />
-                </>
-              )}
-            </nav>
-
-            <button onClick={() => signOut()} className="mt-6 w-full rounded-2xl bg-red-700 px-4 py-3 font-black hover:bg-red-600">
-              Sair
-            </button>
-          </aside>
-
-          <div className="space-y-5">
-            <section className="rounded-3xl border border-red-950 bg-black/75 p-6 shadow-xl shadow-red-950/30">
-              <div className="flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <p className="font-black text-red-500">BEM-VINDO(A)</p>
-                  <h1 className="mt-1 text-4xl font-black">{nomeExibicao(membro)}</h1>
-                  <p className="mt-2 text-zinc-400">Passaporte: {membro.passaporte || "Não informado"} • Baú: {membro.numeroBau || "Não informado"}</p>
-                  <span className="mt-3 inline-block rounded-full border border-red-800 bg-red-950/60 px-4 py-1 text-sm font-black text-red-300">
-                    {membro.cargo}
-                  </span>
-                </div>
-
-                <div className="rounded-2xl border border-red-900 bg-zinc-950 p-5 text-center">
-                  <p className="text-sm font-black text-zinc-400">REGISTRO DE HORAS</p>
-                  <p className="mt-2 text-2xl font-black">{plantaoAberto ? "🟢 Em plantão" : "⚪ Fora da cidade"}</p>
-
-                  <div className="mt-4 flex gap-3">
-                    <button onClick={iniciarPlantao} disabled={!!plantaoAberto} className="rounded-xl bg-green-700 px-5 py-3 font-black hover:bg-green-600 disabled:opacity-40">
-                      Entrada
-                    </button>
-                    <button onClick={encerrarPlantao} disabled={!plantaoAberto} className="rounded-xl bg-red-700 px-5 py-3 font-black hover:bg-red-600 disabled:opacity-40">
-                      Saída
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </section>
-
-            <section className="grid gap-4 md:grid-cols-3">
-              <DashboardCard titulo="STATUS DA META" valor={`${porcentagemMeta}%`} desc={statusMeta} destaque />
-              {!isElite && <Card titulo="STATUS DA META" valor={`${porcentagemMeta}%`} desc={statusMeta} destaque />}
-             <DashboardCard titulo="FARMS PENDENTES" valor={String(farmsPendentes)} desc="AGUARDANDO APROVAÇÃO" destaque />
-            </section>
-
-            {!isElite && (
-              <section className="rounded-3xl border border-red-950 bg-black/75 p-6 shadow-xl shadow-red-950/30">
-                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h2 className="text-2xl font-black text-red-500">🎯 MINHA META SEMANAL</h2>
-                    <p className="text-sm text-zinc-500">Contando somente farms aprovados da semana atual.</p>
-                  </div>
-                  <p className="text-5xl font-black text-green-400">{porcentagemMeta}%</p>
-                </div>
-
-                <div className="mt-5 h-5 w-full overflow-hidden rounded-full bg-zinc-800">
-                  <div className="h-5 bg-green-500 transition-all" style={{ width: `${porcentagemMeta}%` }} />
-                </div>
-
-                <div className="mt-5 grid gap-3 md:grid-cols-4">
-                  <MiniMeta nome="Folhas" atual={folhasMeta} meta={2000} />
-                  <MiniMeta nome="Ópios" atual={opiosMeta} meta={2000} />
-                  <MiniMeta nome="Seringas" atual={seringasMeta} meta={800} />
-                  <MiniMeta nome="Agulhas" atual={agulhasMeta} meta={800} />
-                </div>
-
-                <p className="mt-4 text-center text-xl font-black text-zinc-300">{statusMeta}</p>
-              </section>
-            )}
-
-            {isElite && (
-              <section className="rounded-3xl border border-red-950 bg-black/75 p-6">
-                <h2 className="text-2xl font-black text-red-500">⚔️ ELITE DE AÇÕES</h2>
-                <p className="mt-3 text-zinc-300">
-                  Você está marcado como Elite/Gerente de Ações e não precisa bater meta de farm semanal.
-                </p>
-              </section>
-            )}
+          <nav className="mt-8 space-y-2">
+            <Menu href="/" ativo texto="🏠 Início" />
+            <Menu href="/metas" texto="🎯 Metas" />
+            <Menu href="/farm" texto="🌿 Farm" />
 
             {podeVerAdmin && (
-              <section className="rounded-3xl border border-red-950 bg-black/75 p-6">
-                <h2 className="mb-4 text-2xl font-black text-red-500">⚠️ CENTRAL DA GERÊNCIA</h2>
+              <>
+                <div className="my-4 border-t border-zinc-800" />
 
-                <div className="grid gap-4 md:grid-cols-3">
-                  <Link href="/admin"><Card titulo="CADASTROS" valor={String(cadastrosPendentes)} desc="PENDENTES" /></Link>
-                  <Link href="/admin"><Card titulo="FARMS" valor={String(farmsPendentes)} desc="PENDENTES" /></Link>
-                  <Link href="/reembolso"><Card titulo="REEMBOLSOS" valor={String(reembolsosPendentes)} desc="PENDENTES" /></Link>
-                </div>
-
-                {(cargoLimpo === "Líder" || cargoLimpo === "Vice-Líder" || cargoLimpo === "Gerente de Farm") && (
-                  <div className="mt-5 rounded-2xl border border-yellow-700 bg-yellow-950/20 p-5 text-center">
-                    <h3 className="text-xl font-black text-yellow-400">📩 ALERTAS INDIVIDUAIS</h3>
-                    <p className="mt-2 text-sm text-zinc-400">
-                      Envia DM para quem não bateu meta, quem não se cadastrou e parabéns para quem bateu.
-                    </p>
-                    <button onClick={enviarAlertasIndividuais} disabled={enviandoAlertas} className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50">
-                      {enviandoAlertas ? "Enviando alertas..." : "📩 Enviar Alertas Individuais"}
-                    </button>
-                  </div>
-                )}
-              </section>
+                <Menu href="/controle-farm" texto="📋 Controle de Farm" />
+                <Menu href="/compras" texto="🛒 Compras" />
+                <Menu href="/contatos" texto="📞 Contatos" />
+                <Menu href="/programacao-semanal" texto="📅 Programação" />
+                <Menu href="/vendas" texto="💰 Vendas" />
+                <Menu href="/producao" texto="🏭 Produção" />
+                <Menu href="/reembolso" texto="💸 Reembolso" />
+              </>
             )}
 
-            <section className="rounded-3xl border border-red-950 bg-black/75 p-6">
-              <h2 className="mb-4 text-2xl font-black text-red-500">📢 AVISOS DA INGLATERRA</h2>
+            <div className="my-4 border-t border-zinc-800" />
 
-              {avisos.length === 0 && <p className="text-zinc-400">Nenhum aviso publicado ainda.</p>}
+            <Menu href="/ranking" texto="🏆 Ranking" />
+            <Menu href="/membros" texto="👥 Membros" />
 
-              <div className="grid gap-3">
-                {avisos.map((aviso) => (
-                  <div key={aviso.id} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
-                    <p className="text-zinc-200">{aviso.texto}</p>
-                  </div>
-                ))}
+            {podeVerAdmin && (
+              <>
+                <Menu href="/acoes" texto="⚔️ Ações" />
+                <Menu href="/relatorio" texto="📊 Relatório" />
+                <Menu href="/admin" texto="⚙️ Admin" />
+              </>
+            )}
+          </nav>
+
+          <button
+            onClick={() => signOut()}
+            className="mt-8 w-full rounded-2xl bg-red-700 py-3 font-black hover:bg-red-600"
+          >
+            Sair
+          </button>
+        </aside>
+
+        <section className="space-y-5">
+          <header className="flex items-center justify-between rounded-3xl border border-red-900 bg-black/80 p-5">
+            <div>
+              <p className="text-xs uppercase tracking-[0.25em] text-zinc-500">
+                Sistema de Gestão
+              </p>
+
+              <h2 className="text-3xl font-black tracking-wide text-white">
+                PAINEL DA INGLATERRA
+              </h2>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 px-5 py-4">
+              <p className="text-lg font-bold text-white">{nomeExibicao(membro)}</p>
+              <p className="text-sm text-zinc-400">{membro.cargo}</p>
+
+              <p className="mt-1 text-xs text-zinc-500">
+                Passaporte: {membro.passaporte || "--"}
+              </p>
+
+              <p className="text-xs text-zinc-500">
+                Baú: {membro.numeroBau || "--"}
+              </p>
+            </div>
+          </header>
+
+          <section className="grid gap-5 lg:grid-cols-4">
+            <Card titulo="🌿 Meta" valor={`${porcentagemMeta}%`} desc={statusMeta} />
+            <Card titulo="⏱️ Horas" valor={formatarMinutos(totalMinutosPlantao)} desc="Plantão total" />
+            <Card titulo="📦 Farms" valor={String(farmsPendentes)} desc="Pendentes" />
+            <Card titulo="💸 Reembolsos" valor={String(reembolsosPendentes)} desc="Pendentes" />
+          </section>
+
+          <section className="rounded-3xl border border-red-900 bg-black/80 p-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-black text-red-500">
+                  🧠 IA DA INGLATERRA
+                </h2>
+
+                <p className="text-zinc-500">
+                  Inteligência operacional da facção
+                </p>
+              </div>
+
+              <span className="rounded-full bg-green-700 px-4 py-2 text-sm font-black">
+                EM OPERAÇÃO
+              </span>
+            </div>
+
+            <div className="mt-6 grid gap-4 lg:grid-cols-2">
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                <h3 className="font-black text-red-400">Situação de Hoje</h3>
+
+                <ul className="mt-4 space-y-3 text-zinc-300">
+                  <li>• Sua meta semanal está em {porcentagemMeta}%</li>
+                  <li>• Status da meta: {statusMeta}</li>
+                  <li>• Farms pendentes: {farmsPendentes}</li>
+                  <li>• Reembolsos pendentes: {reembolsosPendentes}</li>
+                  <li>• Cadastros pendentes: {cadastrosPendentes}</li>
+                  <li>• Horas registradas: {formatarMinutos(totalMinutosPlantao)}</li>
+                </ul>
+              </div>
+
+              <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-5">
+                <h3 className="font-black text-green-400">Recomendações</h3>
+
+                <ul className="mt-4 space-y-3 text-zinc-300">
+                  {farmsPendentes > 0 && <li>✔ Conferir farms pendentes</li>}
+                  {reembolsosPendentes > 0 && <li>✔ Verificar reembolsos em aberto</li>}
+                  {!isElite && porcentagemMeta < 100 && <li>✔ Acompanhar meta até domingo 23:59</li>}
+                  {cadastrosPendentes > 0 && <li>✔ Aprovar cadastros pendentes</li>}
+                  {isElite && <li>✔ Elite/Gerente de Ações está isento de meta</li>}
+                </ul>
+              </div>
+            </div>
+          </section>
+
+          {!isElite && (
+            <section className="rounded-3xl border border-red-900 bg-black/80 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-black text-red-500">
+                    🎯 Minha Meta Semanal
+                  </h2>
+
+                  <p className="text-sm text-zinc-500">
+                    Contando somente farms aprovados da semana atual.
+                  </p>
+                </div>
+
+                <p className="text-5xl font-black text-green-400">
+                  {porcentagemMeta}%
+                </p>
+              </div>
+
+              <div className="mt-5 h-5 w-full overflow-hidden rounded-full bg-zinc-800">
+                <div
+                  className="h-5 bg-red-600 transition-all"
+                  style={{ width: `${porcentagemMeta}%` }}
+                />
+              </div>
+
+              <div className="mt-5 grid gap-3 md:grid-cols-4">
+                <MiniMeta nome="Folhas" atual={folhasMeta} meta={2000} />
+                <MiniMeta nome="Ópios" atual={opiosMeta} meta={2000} />
+                <MiniMeta nome="Seringas" atual={seringasMeta} meta={800} />
+                <MiniMeta nome="Agulhas" atual={agulhasMeta} meta={800} />
               </div>
             </section>
-          </div>
+          )}
+
+          {isElite && (
+            <section className="rounded-3xl border border-red-900 bg-black/80 p-6">
+              <h2 className="text-2xl font-black text-red-500">
+                ⚔️ Elite de Ações
+              </h2>
+
+              <p className="mt-3 text-zinc-300">
+                Você está marcado como Elite/Gerente de Ações e não precisa bater
+                meta de farm semanal.
+              </p>
+            </section>
+          )}
+
+          {podeVerAdmin && (
+            <section className="rounded-3xl border border-red-900 bg-black/80 p-6">
+              <h2 className="mb-4 text-2xl font-black text-red-500">
+                ⚠️ Central da Gerência
+              </h2>
+
+              <div className="grid gap-4 md:grid-cols-3">
+                <Link href="/admin">
+                  <Card titulo="Cadastros" valor={String(cadastrosPendentes)} desc="Pendentes" />
+                </Link>
+
+                <Link href="/admin">
+                  <Card titulo="Farms" valor={String(farmsPendentes)} desc="Pendentes" />
+                </Link>
+
+                <Link href="/reembolso">
+                  <Card titulo="Reembolsos" valor={String(reembolsosPendentes)} desc="Pendentes" />
+                </Link>
+              </div>
+
+              {(cargoLimpo === "Líder" ||
+                cargoLimpo === "Vice-Líder" ||
+                cargoLimpo === "Gerente de Farm") && (
+                <div className="mt-5 rounded-2xl border border-yellow-700 bg-yellow-950/20 p-5 text-center">
+                  <h3 className="text-xl font-black text-yellow-400">
+                    📩 Alertas Individuais
+                  </h3>
+
+                  <p className="mt-2 text-sm text-zinc-400">
+                    Envia DM para quem não bateu meta, quem não se cadastrou e
+                    parabéns para quem bateu.
+                  </p>
+
+                  <button
+                    onClick={enviarAlertasIndividuais}
+                    disabled={enviandoAlertas}
+                    className="mt-4 w-full rounded-xl bg-yellow-600 px-6 py-4 font-black text-black hover:bg-yellow-500 disabled:opacity-50"
+                  >
+                    {enviandoAlertas
+                      ? "Enviando alertas..."
+                      : "📩 Enviar Alertas Individuais"}
+                  </button>
+                </div>
+              )}
+            </section>
+          )}
         </section>
+
+        <aside className="space-y-5">
+          <div className="rounded-3xl border border-zinc-800 bg-[#111111] p-6">
+            <h3 className="text-lg font-black text-red-500">⏱️ Plantão</h3>
+
+            <p className="mt-3 text-2xl font-black">
+              {plantaoAberto ? "🟢 Em plantão" : "⚪ Fora da cidade"}
+            </p>
+
+            <p className="mt-2 text-sm text-zinc-400">
+              Total: {formatarMinutos(totalMinutosPlantao)}
+            </p>
+
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <button
+                onClick={iniciarPlantao}
+                disabled={!!plantaoAberto}
+                className="rounded-xl bg-green-700 py-3 font-black hover:bg-green-600 disabled:opacity-40"
+              >
+                Entrada
+              </button>
+
+              <button
+                onClick={encerrarPlantao}
+                disabled={!plantaoAberto}
+                className="rounded-xl bg-red-700 py-3 font-black hover:bg-red-600 disabled:opacity-40"
+              >
+                Saída
+              </button>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-800 bg-[#111111] p-6">
+            <h3 className="text-lg font-black text-red-500">📢 Avisos</h3>
+
+            {avisos.length === 0 && (
+              <p className="mt-4 text-zinc-400">Nenhum aviso publicado ainda.</p>
+            )}
+
+            <div className="mt-4 grid gap-3">
+              {avisos.map((aviso) => (
+                <div
+                  key={aviso.id}
+                  className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4"
+                >
+                  <p className="text-zinc-200">{aviso.texto}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-zinc-800 bg-[#111111] p-6">
+            <h3 className="text-lg font-black text-red-500">⚠️ Pendências</h3>
+
+            <div className="mt-4 space-y-3 text-sm text-zinc-300">
+              <p>Cadastros pendentes: {cadastrosPendentes}</p>
+              <p>Farms pendentes: {farmsPendentes}</p>
+              <p>Reembolsos pendentes: {reembolsosPendentes}</p>
+            </div>
+          </div>
+        </aside>
       </section>
     </main>
   );
 }
 
-function Menu({ href, texto, ativo = false }: { href: string; texto: string; ativo?: boolean }) {
+function Menu({
+  href,
+  texto,
+  ativo = false,
+}: {
+  href: string;
+  texto: string;
+  ativo?: boolean;
+}) {
   return (
     <Link
       href={href}
-      className={`block rounded-2xl px-4 py-3 font-black transition ${
+      className={`block w-full rounded-xl px-4 py-3 text-left text-sm font-semibold transition-all duration-200 ${
         ativo
-          ? "bg-red-800 text-white shadow-lg shadow-red-950/40"
-          : "text-zinc-400 hover:bg-zinc-900 hover:text-white"
+          ? "bg-red-700 text-white shadow-lg shadow-red-950/40"
+          : "bg-zinc-950 text-zinc-400 hover:translate-x-1 hover:bg-zinc-900 hover:text-white"
       }`}
     >
       {texto}
@@ -699,32 +868,46 @@ function Menu({ href, texto, ativo = false }: { href: string; texto: string; ati
   );
 }
 
-function Card({ titulo, valor, desc, destaque = false }: { titulo: string; valor: string; desc: string; destaque?: boolean }) {
+function Card({
+  titulo,
+  valor,
+  desc,
+}: {
+  titulo: string;
+  valor: string;
+  desc: string;
+}) {
   return (
-    <div className={`rounded-3xl border p-5 text-center ${
-      destaque
-        ? "border-red-900 bg-black/80 shadow-lg shadow-red-950/30"
-        : "border-red-950 bg-black/70"
-    }`}>
-      <p className="text-sm font-bold text-zinc-400">{titulo}</p>
-      <h3 className="mt-2 text-3xl font-black">{valor}</h3>
-      <p className="mt-2 text-xs font-bold text-zinc-500">{desc}</p>
+    <div className="rounded-3xl border border-zinc-800 bg-[#111111] p-5 text-center transition-all duration-300 hover:-translate-y-1 hover:border-red-700 hover:shadow-xl hover:shadow-red-950/20">
+      <p className="text-sm font-medium text-zinc-500">{titulo}</p>
+
+      <h2 className="mt-3 text-4xl font-extrabold tracking-tight">{valor}</h2>
+
+      <p className="mt-2 text-sm text-zinc-500">{desc}</p>
     </div>
   );
 }
 
-function MiniMeta({ nome, atual, meta }: { nome: string; atual: number; meta: number }) {
+function MiniMeta({
+  nome,
+  atual,
+  meta,
+}: {
+  nome: string;
+  atual: number;
+  meta: number;
+}) {
   const porcentagem = Math.min(100, Math.floor((atual / meta) * 100));
 
   return (
-    <div className="rounded-2xl border border-red-950 bg-zinc-950 p-4">
+    <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
       <div className="flex items-center justify-between">
         <p className="font-black text-zinc-300">{nome}</p>
         <p className="text-sm font-black text-red-400">{porcentagem}%</p>
       </div>
 
       <p className="mt-2 text-xl font-black">
-        {atual}/{meta}
+        {formatarNumero(atual)}/{formatarNumero(meta)}
       </p>
 
       <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-zinc-800">
