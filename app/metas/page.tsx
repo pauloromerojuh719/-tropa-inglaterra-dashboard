@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSession, signIn } from "next-auth/react";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "../lib/firebase";
 
@@ -14,6 +15,14 @@ type Farm = {
   agulhas: number;
   status: string;
   criadoEm?: any;
+};
+
+type MembroSistema = {
+  nome?: string;
+  nomeRP?: string;
+  email?: string;
+  cargo?: string;
+  status?: string;
 };
 
 type ResumoMembro = {
@@ -34,13 +43,32 @@ const META_OPIOS = 2000;
 const META_SERINGAS = 800;
 const META_AGULHAS = 800;
 
+const cargosQueVeemTodos = [
+  "Líder",
+  "Vice-Líder",
+  "Gerente Geral",
+  "Gerente de Farm",
+  "Gerente de Produção",
+  "Gerente de Compras",
+  "Gerente de Vendas",
+];
+
 export default function MetasPage() {
+  const { data: session, status } = useSession();
+
   const [membros, setMembros] = useState<ResumoMembro[]>([]);
+  const [membroLogado, setMembroLogado] = useState<MembroSistema | null>(null);
   const [carregando, setCarregando] = useState(true);
 
   useEffect(() => {
-    carregarMetas();
-  }, []);
+    if (status === "authenticated") {
+      carregarMetas();
+    }
+
+    if (status === "unauthenticated") {
+      setCarregando(false);
+    }
+  }, [status]);
 
   function inicioSemanaAtual() {
     const hoje = new Date();
@@ -74,8 +102,24 @@ export default function MetasPage() {
   async function carregarMetas() {
     setCarregando(true);
 
-    const snapshot = await getDocs(collection(db, "farm"));
-    const farms = snapshot.docs.map((doc) => doc.data() as Farm);
+    const emailLogado = session?.user?.email || "";
+
+    const membrosSnapshot = await getDocs(collection(db, "membros"));
+
+    const todosMembrosSistema = membrosSnapshot.docs.map(
+      (doc) => doc.data() as MembroSistema
+    );
+
+    const usuarioLogado =
+      todosMembrosSistema.find((membro) => membro.email === emailLogado) ||
+      null;
+
+    setMembroLogado(usuarioLogado);
+
+    const podeVerTodos = cargosQueVeemTodos.includes(usuarioLogado?.cargo || "");
+
+    const farmsSnapshot = await getDocs(collection(db, "farm"));
+    const farms = farmsSnapshot.docs.map((doc) => doc.data() as Farm);
 
     const aprovados = farms.filter((farm) => farm.status === "aprovado");
 
@@ -87,6 +131,10 @@ export default function MetasPage() {
     aprovados.forEach((farm) => {
       const data = pegarData(farm);
       if (!data) return;
+
+      if (!podeVerTodos && farm.membroEmail !== emailLogado) {
+        return;
+      }
 
       const chave =
         farm.membroId || farm.membroEmail || farm.membroNome || "Sem nome";
@@ -187,14 +235,43 @@ export default function MetasPage() {
     return Math.min((valor / meta) * 100, 100);
   }
 
+  const podeVerTodos = cargosQueVeemTodos.includes(membroLogado?.cargo || "");
+
   const bateramMeta = membros.filter((membro) => bateuMeta(membro));
   const naoBateramMeta = membros.filter((membro) => !bateuMeta(membro));
 
+  if (status === "unauthenticated") {
+    return (
+      <main className="min-h-screen bg-black text-white p-10">
+        <h1 className="mb-8 text-5xl font-black text-red-600">
+          🎯 META DA SEMANA
+        </h1>
+
+        <p className="mb-5 text-zinc-400">
+          Você precisa entrar com Discord para ver sua meta.
+        </p>
+
+        <button
+          onClick={() => signIn("discord")}
+          className="rounded-xl bg-red-700 px-6 py-3 font-black hover:bg-red-600"
+        >
+          Entrar com Discord
+        </button>
+      </main>
+    );
+  }
+
   return (
     <main className="min-h-screen bg-black text-white p-10">
-      <h1 className="mb-8 text-5xl font-black text-red-600">
+      <h1 className="mb-3 text-5xl font-black text-red-600">
         🎯 META DA SEMANA
       </h1>
+
+      <p className="mb-8 text-zinc-400">
+        {podeVerTodos
+          ? "Você está vendo a meta de todos os membros."
+          : "Você está vendo somente a sua meta."}
+      </p>
 
       {carregando && <p>Carregando metas...</p>}
 
@@ -202,7 +279,7 @@ export default function MetasPage() {
         <p className="text-zinc-400">Nenhum farm aprovado ainda.</p>
       )}
 
-      {!carregando && membros.length > 0 && (
+      {!carregando && membros.length > 0 && podeVerTodos && (
         <div className="mb-10 grid gap-6 md:grid-cols-2">
           <div className="rounded-xl border border-green-700 bg-zinc-950 p-6">
             <h2 className="mb-4 text-3xl font-black text-green-400">

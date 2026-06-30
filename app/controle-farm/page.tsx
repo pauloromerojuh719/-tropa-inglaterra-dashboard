@@ -51,6 +51,16 @@ const META_OPIOS = 2000;
 const META_SERINGAS = 800;
 const META_AGULHAS = 800;
 
+const cargosQueVeemTodos = [
+  "Líder",
+  "Vice-Líder",
+  "Gerente Geral",
+  "Gerente de Farm",
+  "Gerente de Produção",
+  "Gerente de Compras",
+  "Gerente de Vendas",
+];
+
 function nomeExibicao(membro?: Membro) {
   if (!membro) return "Sem nome";
 
@@ -64,15 +74,19 @@ function nomeExibicao(membro?: Membro) {
   );
 }
 
+function chaveResumo(membro: ResumoMembro) {
+  return membro.membroId || membro.membroEmail || membro.membroNome;
+}
+
 export default function ControleFarmPage() {
   const { data: session } = useSession();
 
   const [resumo, setResumo] = useState<ResumoMembro[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
-  const [membroSelecionado, setMembroSelecionado] =
-    useState<ResumoMembro | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [temPermissao, setTemPermissao] = useState(false);
+  const [podeVerTodos, setPodeVerTodos] = useState(false);
+  const [membroAberto, setMembroAberto] = useState<string | null>(null);
   const [imagemAberta, setImagemAberta] = useState<string | null>(null);
 
   useEffect(() => {
@@ -109,8 +123,13 @@ export default function ControleFarmPage() {
   }
 
   function formatarData(data: any) {
-    if (!data?.toDate) return "Sem data";
-    return data.toDate().toLocaleString("pt-BR");
+    if (!data) return "Sem data";
+
+    if (data?.toDate) {
+      return data.toDate().toLocaleString("pt-BR");
+    }
+
+    return new Date(data).toLocaleString("pt-BR");
   }
 
   async function verificarPermissao() {
@@ -138,25 +157,35 @@ export default function ControleFarmPage() {
     const cargo = membro.cargo?.trim();
     const status = membro.status?.trim();
 
-    if (
-      status === "aprovado" &&
-      (cargo === "Líder" ||
-        cargo === "Vice-Líder" ||
-        cargo === "Gerente Geral" ||
-        cargo === "Gerente de Farm" ||
-        cargo === "Gerente de Produção" ||
-        cargo?.includes("Gerente"))
-    ) {
-      setTemPermissao(true);
-      await carregarControleFarm();
-    } else {
+    if (status !== "aprovado") {
       setTemPermissao(false);
+      setCarregando(false);
+      return;
     }
+
+    const cargoVeTodos = cargosQueVeemTodos.includes(cargo || "");
+
+    setTemPermissao(true);
+    setPodeVerTodos(cargoVeTodos);
+
+    await carregarControleFarm({
+      podeVerTodos: cargoVeTodos,
+      membroLogado: membro,
+      discordIdLogado: discordId,
+    });
 
     setCarregando(false);
   }
 
-  async function carregarControleFarm() {
+  async function carregarControleFarm({
+    podeVerTodos,
+    membroLogado,
+    discordIdLogado,
+  }: {
+    podeVerTodos: boolean;
+    membroLogado: Membro;
+    discordIdLogado: string;
+  }) {
     const farmSnap = await getDocs(collection(db, "farm"));
     const membrosSnap = await getDocs(collection(db, "membros"));
 
@@ -204,6 +233,16 @@ export default function ControleFarmPage() {
       const membroId = farm.membroId || membroDoCadastro?.discordId || "";
       const chave = membroId || membroEmail || nomeCorreto;
 
+      const emailLogado = membroLogado.email || "";
+      const podeVerEsseFarm =
+        podeVerTodos ||
+        membroId === discordIdLogado ||
+        farm.membroId === discordIdLogado ||
+        membroEmail === emailLogado ||
+        farm.membroEmail === emailLogado;
+
+      if (!podeVerEsseFarm) return;
+
       const farmCorrigido = {
         ...farm,
         membroNome: nomeCorreto,
@@ -227,7 +266,8 @@ export default function ControleFarmPage() {
       };
 
       const isSemanaAtual = dataFarm >= semanaAtual;
-      const isSemanaPassada = dataFarm >= semanaPassada && dataFarm < semanaAtual;
+      const isSemanaPassada =
+        dataFarm >= semanaPassada && dataFarm < semanaAtual;
 
       if (isSemanaAtual) {
         listaFarmsSemanaAtual.push(farmCorrigido);
@@ -237,6 +277,8 @@ export default function ControleFarmPage() {
         }
 
         mapaAtual[chave].membroNome = nomeCorreto;
+        mapaAtual[chave].membroEmail = membroEmail;
+        mapaAtual[chave].membroId = membroId;
         mapaAtual[chave].folhas += Number(farm.folhas || 0);
         mapaAtual[chave].opios += Number(farm.opios || 0);
         mapaAtual[chave].seringas += Number(farm.seringas || 0);
@@ -249,6 +291,8 @@ export default function ControleFarmPage() {
         }
 
         mapaPassado[chave].membroNome = nomeCorreto;
+        mapaPassado[chave].membroEmail = membroEmail;
+        mapaPassado[chave].membroId = membroId;
         mapaPassado[chave].folhas += Number(farm.folhas || 0);
         mapaPassado[chave].opios += Number(farm.opios || 0);
         mapaPassado[chave].seringas += Number(farm.seringas || 0);
@@ -264,7 +308,6 @@ export default function ControleFarmPage() {
     const lista = Array.from(todasChaves).map((chave) => {
       const atual = mapaAtual[chave];
       const passado = mapaPassado[chave];
-
       const base = atual || passado;
 
       const sobraFolhas = Math.max((passado?.folhas || 0) - META_FOLHAS, 0);
@@ -340,32 +383,26 @@ export default function ControleFarmPage() {
     return faltas.join(" | ");
   }
 
-  function farmsDoMembro() {
-    if (!membroSelecionado) return [];
-
+  function farmsDoMembro(membro: ResumoMembro) {
     return farms
       .filter((farm) => {
         const chaveFarm = farm.membroId || farm.membroEmail || farm.membroNome;
         const chaveMembro =
-          membroSelecionado.membroId ||
-          membroSelecionado.membroEmail ||
-          membroSelecionado.membroNome;
+          membro.membroId || membro.membroEmail || membro.membroNome;
 
         return chaveFarm === chaveMembro;
       })
       .sort((a, b) => {
-        const dataA = a.criadoEm?.toDate?.()?.getTime?.() || 0;
-        const dataB = b.criadoEm?.toDate?.()?.getTime?.() || 0;
+        const dataA = pegarDataFarm(a)?.getTime?.() || 0;
+        const dataB = pegarDataFarm(b)?.getTime?.() || 0;
         return dataB - dataA;
       });
   }
 
-  const bateramMeta = resumo.filter((membro) => bateuMeta(membro));
-  const naoBateramMeta = resumo.filter((membro) => !bateuMeta(membro));
-  const listaFarmsMembro = farmsDoMembro();
-  const ultimoFarm = listaFarmsMembro[0];
-
   function gerarPDFMetas() {
+    const bateramMeta = resumo.filter((membro) => bateuMeta(membro));
+    const naoBateramMeta = resumo.filter((membro) => !bateuMeta(membro));
+
     const pdf = new jsPDF();
 
     const totalMembros = resumo.length;
@@ -440,6 +477,9 @@ export default function ControleFarmPage() {
     pdf.save("relatorio-metas-farm.pdf");
   }
 
+  const bateramMeta = resumo.filter((membro) => bateuMeta(membro));
+  const naoBateramMeta = resumo.filter((membro) => !bateuMeta(membro));
+
   if (carregando) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-black text-white">
@@ -474,7 +514,7 @@ export default function ControleFarmPage() {
           <h1 className="text-5xl font-black text-red-600">❌ ACESSO NEGADO</h1>
 
           <p className="mt-4 text-zinc-400">
-            Apenas Líder, Vice-Líder, Gerente Geral, Gerente de Farm ou Gerente de Produção podem acessar esta área.
+            Seu cadastro precisa estar aprovado para acessar esta área.
           </p>
         </div>
       </main>
@@ -487,69 +527,81 @@ export default function ControleFarmPage() {
         🌿 CONTROLE DE FARM
       </h1>
 
-      <button
-        onClick={gerarPDFMetas}
-        className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-black text-white hover:bg-red-600"
-      >
-        📄 Gerar PDF das Metas
-      </button>
+      <p className="mt-3 text-zinc-400">
+        {podeVerTodos
+          ? "Você está vendo o controle de farm de todos os membros."
+          : "Você está vendo somente o seu controle de farm."}
+      </p>
 
-      <section className="mt-8 grid gap-6 md:grid-cols-2">
-        <div className="rounded-xl border border-green-700 bg-zinc-950 p-6">
-          <h2 className="text-3xl font-black text-green-400">
-            ✅ Bateram a meta
-          </h2>
+      {podeVerTodos && (
+        <button
+          onClick={gerarPDFMetas}
+          className="mt-6 rounded-xl bg-red-700 px-6 py-3 font-black text-white hover:bg-red-600"
+        >
+          📄 Gerar PDF das Metas
+        </button>
+      )}
 
-          <p className="mt-2 text-zinc-400">Total: {bateramMeta.length}</p>
+      {podeVerTodos && (
+        <section className="mt-8 grid gap-6 md:grid-cols-2">
+          <div className="rounded-xl border border-green-700 bg-zinc-950 p-6">
+            <h2 className="text-3xl font-black text-green-400">
+              ✅ Bateram a meta
+            </h2>
 
-          <div className="mt-4 grid gap-3">
-            {bateramMeta.length === 0 ? (
-              <p className="text-zinc-500">Ninguém bateu a meta ainda.</p>
-            ) : (
-              bateramMeta.map((membro) => (
-                <div
-                  key={membro.membroId || membro.membroEmail || membro.membroNome}
-                  className="rounded-lg bg-green-950 p-3 font-bold text-green-300"
-                >
-                  ✅ {membro.membroNome}
-                </div>
-              ))
-            )}
+            <p className="mt-2 text-zinc-400">Total: {bateramMeta.length}</p>
+
+            <div className="mt-4 grid gap-3">
+              {bateramMeta.length === 0 ? (
+                <p className="text-zinc-500">Ninguém bateu a meta ainda.</p>
+              ) : (
+                bateramMeta.map((membro) => (
+                  <div
+                    key={chaveResumo(membro)}
+                    className="rounded-lg bg-green-950 p-3 font-bold text-green-300"
+                  >
+                    ✅ {membro.membroNome}
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
 
-        <div className="rounded-xl border border-yellow-700 bg-zinc-950 p-6">
-          <h2 className="text-3xl font-black text-yellow-400">
-            ❌ Não bateram a meta
-          </h2>
+          <div className="rounded-xl border border-yellow-700 bg-zinc-950 p-6">
+            <h2 className="text-3xl font-black text-yellow-400">
+              ❌ Não bateram a meta
+            </h2>
 
-          <p className="mt-2 text-zinc-400">Total: {naoBateramMeta.length}</p>
+            <p className="mt-2 text-zinc-400">Total: {naoBateramMeta.length}</p>
 
-          <div className="mt-4 grid gap-3">
-            {naoBateramMeta.length === 0 ? (
-              <p className="text-zinc-500">Todos bateram a meta.</p>
-            ) : (
-              naoBateramMeta.map((membro) => (
-                <div
-                  key={membro.membroId || membro.membroEmail || membro.membroNome}
-                  className="rounded-lg bg-yellow-950 p-3"
-                >
-                  <p className="font-bold text-yellow-300">
-                    ❌ {membro.membroNome}
-                  </p>
+            <div className="mt-4 grid gap-3">
+              {naoBateramMeta.length === 0 ? (
+                <p className="text-zinc-500">Todos bateram a meta.</p>
+              ) : (
+                naoBateramMeta.map((membro) => (
+                  <div
+                    key={chaveResumo(membro)}
+                    className="rounded-lg bg-yellow-950 p-3"
+                  >
+                    <p className="font-bold text-yellow-300">
+                      ❌ {membro.membroNome}
+                    </p>
 
-                  <p className="mt-1 text-sm text-yellow-200">
-                    {pendenciasMeta(membro)}
-                  </p>
-                </div>
-              ))
-            )}
+                    <p className="mt-1 text-sm text-yellow-200">
+                      {pendenciasMeta(membro)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-        <h2 className="text-3xl font-bold">Resumo dos Membros</h2>
+        <h2 className="text-3xl font-bold">
+          {podeVerTodos ? "Resumo dos Membros" : "Meu Farm da Semana"}
+        </h2>
 
         {resumo.length === 0 ? (
           <p className="mt-4 text-zinc-400">
@@ -557,200 +609,208 @@ export default function ControleFarmPage() {
           </p>
         ) : (
           <div className="mt-6 grid gap-4">
-            {resumo.map((membro, index) => (
-              <div
-                key={membro.membroId || membro.membroEmail || membro.membroNome}
-                className="rounded-xl border border-zinc-800 bg-black p-5"
-              >
-                <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <h3 className="text-2xl font-black">
-                      {index === 0
-                        ? "🥇"
-                        : index === 1
-                        ? "🥈"
-                        : index === 2
-                        ? "🥉"
-                        : `#${index + 1}`}{" "}
-                      {membro.membroNome}
-                    </h3>
+            {resumo.map((membro, index) => {
+              const chave = chaveResumo(membro);
+              const aberto = membroAberto === chave;
+              const listaFarmsMembro = farmsDoMembro(membro);
+              const ultimoFarm = listaFarmsMembro[0];
 
-                    <p className="mt-1 text-zinc-400">
-                      {membro.membroEmail}
-                    </p>
-
-                    <p className="mt-2 font-bold text-red-400">
-                      {statusMeta(membro)}
-                    </p>
-
-                    {(membro.sobraFolhas > 0 ||
-                      membro.sobraOpios > 0 ||
-                      membro.sobraSeringas > 0 ||
-                      membro.sobraAgulhas > 0) && (
-                      <p className="mt-2 text-sm font-bold text-green-400">
-                        Sobra da semana passada: 🍃 {membro.sobraFolhas} | 💊{" "}
-                        {membro.sobraOpios} | 💉 {membro.sobraSeringas} | 🪡{" "}
-                        {membro.sobraAgulhas}
-                      </p>
-                    )}
-
+              return (
+                <div
+                  key={chave}
+                  className="rounded-xl border border-zinc-800 bg-black p-5"
+                >
+                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                     <button
-                      onClick={() => setMembroSelecionado(membro)}
-                      className="mt-4 rounded bg-red-700 px-4 py-2 font-bold hover:bg-red-600"
+                      onClick={() => setMembroAberto(aberto ? null : chave)}
+                      className="text-left"
                     >
-                      Ver Perfil Farm
-                    </button>
-                  </div>
+                      <h3 className="text-2xl font-black hover:text-red-500">
+                        {podeVerTodos &&
+                          (index === 0
+                            ? "🥇 "
+                            : index === 1
+                            ? "🥈 "
+                            : index === 2
+                            ? "🥉 "
+                            : `#${index + 1} `)}
+                        {membro.membroNome} {aberto ? "▲" : "▼"}
+                      </h3>
 
-                  <div className="grid gap-3 text-right md:grid-cols-5">
-                    <div>
-                      <p className="text-sm text-zinc-400">Folhas</p>
-                      <p className="text-xl font-black">{membro.folhas}</p>
-                    </div>
+                      <p className="mt-1 text-zinc-400">{membro.membroEmail}</p>
 
-                    <div>
-                      <p className="text-sm text-zinc-400">Ópios</p>
-                      <p className="text-xl font-black">{membro.opios}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-zinc-400">Seringas</p>
-                      <p className="text-xl font-black">{membro.seringas}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-zinc-400">Agulhas</p>
-                      <p className="text-xl font-black">{membro.agulhas}</p>
-                    </div>
-
-                    <div>
-                      <p className="text-sm text-zinc-400">Total</p>
-                      <p className="text-xl font-black text-red-500">
-                        {membro.total}
+                      <p
+                        className={`mt-2 font-bold ${
+                          bateuMeta(membro) ? "text-green-400" : "text-yellow-400"
+                        }`}
+                      >
+                        {statusMeta(membro)}
                       </p>
+
+                      {!bateuMeta(membro) && (
+                        <p className="mt-1 text-sm text-yellow-300">
+                          {pendenciasMeta(membro)}
+                        </p>
+                      )}
+
+                      {(membro.sobraFolhas > 0 ||
+                        membro.sobraOpios > 0 ||
+                        membro.sobraSeringas > 0 ||
+                        membro.sobraAgulhas > 0) && (
+                        <p className="mt-2 text-sm font-bold text-green-400">
+                          Sobra da semana passada: 🍃 {membro.sobraFolhas} | 💊{" "}
+                          {membro.sobraOpios} | 💉 {membro.sobraSeringas} | 🪡{" "}
+                          {membro.sobraAgulhas}
+                        </p>
+                      )}
+                    </button>
+
+                    <div className="grid gap-3 text-right md:grid-cols-5">
+                      <div>
+                        <p className="text-sm text-zinc-400">Folhas</p>
+                        <p className="text-xl font-black">{membro.folhas}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-zinc-400">Ópios</p>
+                        <p className="text-xl font-black">{membro.opios}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-zinc-400">Seringas</p>
+                        <p className="text-xl font-black">{membro.seringas}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-zinc-400">Agulhas</p>
+                        <p className="text-xl font-black">{membro.agulhas}</p>
+                      </div>
+
+                      <div>
+                        <p className="text-sm text-zinc-400">Total</p>
+                        <p className="text-xl font-black text-red-500">
+                          {membro.total}
+                        </p>
+                      </div>
                     </div>
                   </div>
+
+                  {aberto && (
+                    <div className="mt-6 border-t border-zinc-800 pt-6">
+                      <div className="grid gap-4 md:grid-cols-5">
+                        <div className="rounded bg-zinc-950 p-4">
+                          <p className="text-zinc-400">🍃 Folhas</p>
+                          <h3 className="text-2xl font-black">
+                            {membro.folhas}
+                          </h3>
+                        </div>
+
+                        <div className="rounded bg-zinc-950 p-4">
+                          <p className="text-zinc-400">💊 Ópios</p>
+                          <h3 className="text-2xl font-black">
+                            {membro.opios}
+                          </h3>
+                        </div>
+
+                        <div className="rounded bg-zinc-950 p-4">
+                          <p className="text-zinc-400">💉 Seringas</p>
+                          <h3 className="text-2xl font-black">
+                            {membro.seringas}
+                          </h3>
+                        </div>
+
+                        <div className="rounded bg-zinc-950 p-4">
+                          <p className="text-zinc-400">🪡 Agulhas</p>
+                          <h3 className="text-2xl font-black">
+                            {membro.agulhas}
+                          </h3>
+                        </div>
+
+                        <div className="rounded bg-zinc-950 p-4">
+                          <p className="text-zinc-400">📦 Total</p>
+                          <h3 className="text-2xl font-black text-red-500">
+                            {membro.total}
+                          </h3>
+                        </div>
+                      </div>
+
+                      <div className="mt-6 rounded bg-zinc-950 p-4">
+                        <p className="font-bold">🎯 Status: {statusMeta(membro)}</p>
+
+                        <p className="mt-2">
+                          🕒 Último farm da semana:{" "}
+                          {ultimoFarm
+                            ? formatarData(ultimoFarm.criadoEm)
+                            : "Sem farm"}
+                        </p>
+
+                        <p className="mt-2">
+                          🖼️ Prints enviados nesta semana:{" "}
+                          {listaFarmsMembro.length}
+                        </p>
+
+                        <p className="mt-2 text-green-400">
+                          Sobra carregada: 🍃 {membro.sobraFolhas} | 💊{" "}
+                          {membro.sobraOpios} | 💉 {membro.sobraSeringas} | 🪡{" "}
+                          {membro.sobraAgulhas}
+                        </p>
+                      </div>
+
+                      <h3 className="mt-8 text-2xl font-bold">
+                        📸 Prints da semana
+                      </h3>
+
+                      <div className="mt-4 grid gap-4 md:grid-cols-3">
+                        {listaFarmsMembro.length === 0 ? (
+                          <p className="text-zinc-400">
+                            Nenhum print encontrado nesta semana.
+                          </p>
+                        ) : (
+                          listaFarmsMembro.map((farm) => (
+                            <div
+                              key={farm.id}
+                              className="rounded-xl border border-zinc-800 bg-zinc-950 p-4"
+                            >
+                              <p>🍃 Folhas: {farm.folhas}</p>
+                              <p>💊 Ópios: {farm.opios}</p>
+                              <p>💉 Seringas: {farm.seringas}</p>
+                              <p>🪡 Agulhas: {farm.agulhas}</p>
+
+                              <p className="mt-2 text-zinc-400">
+                                Data: {formatarData(farm.criadoEm)}
+                              </p>
+
+                              {farm.print ? (
+                                <img
+                                  src={farm.print}
+                                  alt="Print do farm"
+                                  onClick={() => setImagemAberta(farm.print || "")}
+                                  className="mt-3 h-40 w-full cursor-pointer rounded border border-zinc-700 object-contain transition hover:scale-105"
+                                />
+                              ) : (
+                                <p className="mt-3 text-sm text-zinc-500">
+                                  Sem imagem nesse farm.
+                                </p>
+                              )}
+                            </div>
+                          ))
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => setMembroAberto(null)}
+                        className="mt-6 rounded bg-zinc-800 px-4 py-2 font-bold hover:bg-zinc-700"
+                      >
+                        ▲ Fechar
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
-
-      {membroSelecionado && (
-        <section className="mt-8 rounded-xl border border-red-900 bg-zinc-950 p-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-3xl font-black text-red-500">
-              👤 {membroSelecionado.membroNome}
-            </h2>
-
-            <button
-              onClick={() => setMembroSelecionado(null)}
-              className="rounded bg-zinc-800 px-4 py-2 font-bold hover:bg-zinc-700"
-            >
-              Fechar
-            </button>
-          </div>
-
-          <p className="mt-2 text-zinc-400">
-            {membroSelecionado.membroEmail}
-          </p>
-
-          <div className="mt-6 grid gap-4 md:grid-cols-5">
-            <div className="rounded bg-black p-4">
-              <p className="text-zinc-400">🍃 Folhas</p>
-              <h3 className="text-2xl font-black">
-                {membroSelecionado.folhas}
-              </h3>
-            </div>
-
-            <div className="rounded bg-black p-4">
-              <p className="text-zinc-400">💊 Ópios</p>
-              <h3 className="text-2xl font-black">
-                {membroSelecionado.opios}
-              </h3>
-            </div>
-
-            <div className="rounded bg-black p-4">
-              <p className="text-zinc-400">💉 Seringas</p>
-              <h3 className="text-2xl font-black">
-                {membroSelecionado.seringas}
-              </h3>
-            </div>
-
-            <div className="rounded bg-black p-4">
-              <p className="text-zinc-400">🪡 Agulhas</p>
-              <h3 className="text-2xl font-black">
-                {membroSelecionado.agulhas}
-              </h3>
-            </div>
-
-            <div className="rounded bg-black p-4">
-              <p className="text-zinc-400">📦 Total</p>
-              <h3 className="text-2xl font-black text-red-500">
-                {membroSelecionado.total}
-              </h3>
-            </div>
-          </div>
-
-          <div className="mt-6 rounded bg-black p-4">
-            <p className="font-bold">
-              🎯 Status: {statusMeta(membroSelecionado)}
-            </p>
-
-            <p className="mt-2">
-              🕒 Último farm da semana:{" "}
-              {ultimoFarm ? formatarData(ultimoFarm.criadoEm) : "Sem farm"}
-            </p>
-
-            <p className="mt-2">
-              🖼️ Prints enviados nesta semana: {listaFarmsMembro.length}
-            </p>
-
-            <p className="mt-2 text-green-400">
-              Sobra carregada: 🍃 {membroSelecionado.sobraFolhas} | 💊{" "}
-              {membroSelecionado.sobraOpios} | 💉{" "}
-              {membroSelecionado.sobraSeringas} | 🪡{" "}
-              {membroSelecionado.sobraAgulhas}
-            </p>
-          </div>
-
-          <h3 className="mt-8 text-2xl font-bold">📸 Prints da semana</h3>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            {listaFarmsMembro.length === 0 ? (
-              <p className="text-zinc-400">
-                Nenhum print encontrado nesta semana.
-              </p>
-            ) : (
-              listaFarmsMembro.map((farm) => (
-                <div
-                  key={farm.id}
-                  className="rounded-xl border border-zinc-800 bg-black p-4"
-                >
-                  <p>🍃 Folhas: {farm.folhas}</p>
-                  <p>💊 Ópios: {farm.opios}</p>
-                  <p>💉 Seringas: {farm.seringas}</p>
-                  <p>🪡 Agulhas: {farm.agulhas}</p>
-
-                  <p className="mt-2 text-zinc-400">
-                    Data: {formatarData(farm.criadoEm)}
-                  </p>
-
-                  {farm.print && (
-                    <img
-                      src={farm.print}
-                      alt="Print do farm"
-                      onClick={() => setImagemAberta(farm.print || "")}
-                      className="mt-3 h-40 w-full cursor-pointer rounded border border-zinc-700 object-contain transition hover:scale-105"
-                    />
-                  )}
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-      )}
 
       {imagemAberta && (
         <div
