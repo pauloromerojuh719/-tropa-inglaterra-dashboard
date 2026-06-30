@@ -196,16 +196,18 @@ export default function ControleFarmPage() {
     const membrosPorEmail: Record<string, Membro> = {};
 
     membrosSnap.docs.forEach((item) => {
-      const dados = item.data() as Membro;
+  const dados = item.data() as Membro;
 
-      if (dados.discordId) {
-        membrosPorId[dados.discordId] = dados;
-      }
+  membrosPorId[item.id] = dados;
 
-      if (dados.email) {
-        membrosPorEmail[dados.email] = dados;
-      }
-    });
+  if (dados.discordId) {
+    membrosPorId[dados.discordId] = dados;
+  }
+
+  if (dados.email) {
+    membrosPorEmail[dados.email] = dados;
+  }
+});
 
     const mapaAtual: Record<string, ResumoMembro> = {};
     const mapaPassado: Record<string, ResumoMembro> = {};
@@ -225,10 +227,10 @@ export default function ControleFarmPage() {
       const membroDoCadastro =
         membrosPorId[farm.membroId] || membrosPorEmail[farm.membroEmail];
 
-      const nomeCorreto =
-  farm.membroNome ||
+const nomeCorreto =
   membroDoCadastro?.nomeRP ||
   membroDoCadastro?.nome ||
+  farm.membroNome ||
   membroDoCadastro?.nomeDiscord ||
   membroDoCadastro?.username ||
   "Sem nome";
